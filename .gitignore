@@ -1,0 +1,21 @@
+# Cache Python
+backend/__pycache__/
+*.pyc
+*.pyo
+
+# Arquivos de sistema Windows
+Thumbs.db
+desktop.ini
+
+# VS Code
+.vscode/
+
+# Imagens grandes (já versionadas separado)
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# Arquivos temporários
+*.tmp
+*.log

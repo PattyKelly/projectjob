@@ -795,10 +795,70 @@ Comparando os dois arquivos em `0805 Ajustes/`, o **Code GS.txt** (versão mais 
 
 ---
 
+### � BLOCO 9 — TRAVA CRÍTICA: "Minerando..." Infinito sem CP digitado (FRONTEND `index.html`)
+
+> **⚠️ URGENTE — Confirmado em produção 09/05/2026 (screenshot)**
+> O sistema fica travado em "Minerando..." por 30+ minutos quando o usuário:
+> 1. NÃO digita nenhum CP no campo `cpSearch`
+> 2. Define um intervalo de datas amplo (ex: 01/01/2026 → 09/05/2026)
+> 3. Clica em "Localizar" ou qualquer ação que dispara `runFilters()`
+
+**Causa raiz:** `runFilters()` dispara `getConsolidatedData(params)` mesmo sem termo — o backend recebe `term: ""` e tenta varrer **todos os 52MB+ de dados de 2026** sem filtro de CP, causando timeout do GAS (6 min) ou travamento infinito da UI.
+
+**O que acontece no código atual (linha ~2858):**
+```javascript
+// Mostra aviso mas NÃO bloqueia a chamada ao backend
+if (!p.term || p.term.trim().length < 2) {
+    tbody.innerHTML = `⚠️ Por favor, digite o Código ou Nome do CP...`;
+    // PROBLEMA: o google.script.run abaixo AINDA É EXECUTADO
+}
+google.script.run.withSuccessHandler(res => { ... }).getConsolidatedData(p);
+```
+
+**Fix obrigatório — adicionar `return` antes da chamada ao backend:**
+```javascript
+if (!p.term || p.term.trim().length < 2) {
+    document.querySelector('#mainTable tbody').innerHTML =
+        `<tr><td colspan="4" style="text-align:center;padding:30px;color:var(--m)">
+        ⚠️ Por favor, digite o Código ou Nome do CP para localizar os logs.</td></tr>`;
+    // Restaurar botão
+    if (btn) { btn.innerText = "🔍 Pesquisar"; btn.style.opacity = "1"; }
+    return; // ← ADICIONAR ESTE RETURN — impede chamada ao backend sem termo
+}
+google.script.run.withSuccessHandler(res => { ... }).getConsolidatedData(p);
+```
+
+**Valores observados no screenshot de 09/05/2026 (estado bugado):**
+
+| Card | Valor exibido | Valor esperado | Status |
+|---|---|---|---|
+| ACESSOS/VIEW (bigTotal) | **32.804** | ~34.000+ | 🔴 Divergente |
+| DISPONIBILIZAÇÕES | **0** | ~95.758 | 🔴 Bug Patricia email |
+| CPS IMPACTADOS | **0** | >300 | 🔴 Bug |
+| IDENTIFICAÇÃO SHERLOCK | **0,00%** | 71,55% | 🔴 Bug |
+| CPS SEM FVC | **0** | 40 | 🔴 Bug |
+| 2025 (6 meses) | **0** | >0 | 🔴 Dados 2025 não carregam |
+| 2026 | **0** | >0 | 🔴 Dados 2026 não carregam |
+| Alta Volumetria (separado) | CP VANIRDA 4.038 ✅ | — | ✅ Carrega corretamente |
+
+> **Nota:** O card "Disponibilizações" no bloco inferior mostra **95.758** corretamente.
+> Os zeros nos cards superiores são do carregamento inicial sem dados consolidados retornados.
+> A Alta Volumetria carrega porque usa um cache diferente do `getConsolidatedData`.
+
+**Checklist BLOCO 9:**
+- [ ] Adicionar `return` em `runFilters()` quando `term.length < 2` — **impede chamada ao backend**
+- [ ] Restaurar estado do botão "Pesquisar" (remover spinner) quando bloquear sem termo
+- [ ] Testar: sem CP digitado + clicar Localizar → deve mostrar aviso, sem travar
+- [ ] Testar: com CP digitado + range de data → deve carregar normalmente
+- [ ] Verificar se `window.onload` também dispara `runFilters()` sem termo (se sim, bloquear também)
+
+---
+
 ### 📋 RESUMO DO QUE PRECISA SER FEITO (ordem de prioridade)
 
 | # | Bloco | Arquivo | Prioridade | Status |
 |---|---|---|---|---|
+| **9** | **TRAVA "Minerando..." infinito — `return` faltando em `runFilters()`** | `index.html` | 🔥 **URGENTE** | ☐ |
 | 1 | Multiplicador Temporal x2/x4 (threshold 05/05/2026) | `Code.gs` | 🔴 Crítica | ☐ |
 | 2 | Contagem por e-mails únicos por CP/dia + x2 | `Code.gs` | 🔴 Crítica | ☐ |
 | 3 | CPs SEM FVC — leitura real da aba `CPS 062026` | `Code.gs` | 🔴 Crítica | ☐ |

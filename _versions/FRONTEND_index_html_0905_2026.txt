@@ -1374,7 +1374,7 @@
                     <button class="nav-btn" onclick="switchTab('tabFaq', this)">FAQ & Ajuda</button>
                     <button id="btnTechTab" class="nav-btn" style="display:none;" onclick="switchTab('tabTech', this)">Tech & Diagnóstico</button>
                     <button class="nav-btn" onclick="openFranchiseAccessManager()">Gerenciador de Acessos Franquia</button>
-                    <button id="btnAdminLogs" class="nav-btn" style="display:none;" onclick="switchTab('tabAdmin', this); loadAdminLogs()">Logs Admin</button>
+                    <!-- Logs Admin: removido da nav em 09/05/2026 a pedido da Patty. Tab tabAdmin e função loadAdminLogs() preservados no código caso precise reativar. -->
                 </nav>
 
                 <div class="header-user">
@@ -2189,14 +2189,18 @@
 
         // LIMPAR FILTROS
         function clearFilters() {
+            const today = new Date().toISOString().split('T')[0];
             document.getElementById('periodFilter').value = '';
             document.getElementById('typeFilter').value = '';
             document.getElementById('cpSearch').value = '';
-            document.getElementById('dateFrom').value = '';
-            document.getElementById('dateTo').value = '';
+            document.getElementById('dateFrom').value = '2026-01-01'; // nunca apagar — padrão correto
+            document.getElementById('dateTo').value = today;
             const filterLabel = document.getElementById('filterLabel');
             if (filterLabel) filterLabel.innerText = '';
-            runFilters();
+            // Não chama runFilters() — sem CP digitado não faz sentido buscar
+            const colCount = canAudit ? 5 : 4;
+            document.querySelector('#mainTable tbody').innerHTML =
+                `<tr><td colspan="${colCount}" style="text-align:center;padding:30px;color:var(--m)">⚠️ Por favor, digite o Código ou Nome do CP para localizar os logs.</td></tr>`;
         }
 
         // GERAR ONEPAGE DIRETO DA NUVEM
@@ -2489,6 +2493,19 @@
             dl.innerHTML = "";
             const suggestions = Array.isArray(stats && stats.suggestions) ? stats.suggestions : [];
             suggestions.forEach(s => dl.appendChild(new Option(s, s)));
+
+            // Event delegation na tabela — substitui onclick inline (evita quebra com aspas/acentos nos nomes)
+            const tableBody = document.querySelector('#mainTable tbody');
+            if (tableBody && !tableBody._cpClickBound) {
+                tableBody._cpClickBound = true;
+                tableBody.addEventListener('click', function(e) {
+                    const row = e.target.closest('tr[data-cpkey]');
+                    if (row) {
+                        const cpKey = row.getAttribute('data-cpkey');
+                        if (cpKey) openCpModal(cpKey);
+                    }
+                });
+            }
         }
 
         function toSafeNumber(value) {
@@ -2835,26 +2852,32 @@
 
         function runFilters() {
             const btn = document.getElementById('btnRefresh');
+            const term = (document.getElementById('cpSearch').value || '').trim();
+
+            // SEM TERMO: avisa e PARA — não chama backend (evita mineração infinita de 50MB+)
+            if (!term || term.length < 2) {
+                if (btn) { btn.innerText = '🔍 Pesquisar'; btn.style.opacity = '1'; }
+                const colCount = canAudit ? 5 : 4;
+                document.querySelector('#mainTable tbody').innerHTML =
+                    `<tr><td colspan="${colCount}" style="text-align:center;padding:30px;color:var(--m)">⚠️ Por favor, digite o Código ou Nome do CP para localizar os logs.</td></tr>`;
+                document.getElementById('filterLabel').innerText = '';
+                return; // ← BLOQUEIA chamada ao backend sem termo
+            }
+
             if (btn) {
                 btn.innerHTML = '<span class="material-icons" style="font-size:18px; animation: spin 1s linear infinite;">sync</span> Minerando...';
                 btn.style.opacity = "0.7";
             }
-            const colCount = canAudit && document.getElementById('cpSearch').value.trim() ? 5 : 4;
+            const colCount = canAudit ? 5 : 4;
             document.querySelector('#mainTable tbody').innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding:30px; color:var(--p); font-weight:600">⏳ Carregando dados de auditoria...</td></tr>`;
 
             const p = {
                 period:   document.getElementById('periodFilter').value,
                 type:     document.getElementById('typeFilter').value,
-                term:     document.getElementById('cpSearch').value,
+                term:     term,
                 dateFrom: document.getElementById('dateFrom').value,
                 dateTo:   document.getElementById('dateTo').value
             };
-
-            if (!p.term || p.term.trim().length < 2) {
-                // Se não há termo, apenas limpamos a lista e avisamos no corpo da tabela, 
-                // mas permitimos que a busca continue para atualizar os números do Dashboard
-                document.querySelector('#mainTable tbody').innerHTML = `<tr><td colspan="4" style="text-align:center; padding:30px; color:var(--m)">⚠️ Por favor, digite o Código ou Nome do CP para localizar os logs.</td></tr>`;
-            }
 
             google.script.run.withSuccessHandler(res => {
                 btn.innerText = "🔍 Pesquisar";
@@ -2914,7 +2937,8 @@
             const tbody = document.querySelector('#mainTable tbody');
             const colCount = showAudit ? 5 : 4;
             tbody.innerHTML = pagedItems.map(i => {
-                const cpKey = (i.c||i.n).replace(/'/g, '\\x27');
+                const cpKey = i.c || i.n || '';
+                const cpKeyEsc = cpKey.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
                 const codCell = (i.c === 'Unknown' || !i.c)
                     ? `<td style="color:var(--m);font-size:0.8em">—</td>`
                     : `<td class="tag">${i.c}</td>`;
@@ -2922,7 +2946,7 @@
                     i.e === '— sistema —'
                         ? `<td style="font-size:0.75em;color:var(--m);font-style:italic">— sistema —</td>`
                         : `<td style="font-size:0.85em;color:#a5b4fc;font-weight:600;letter-spacing:0.03em">${maskEmail(i.e)}</td>`;
-                return `<tr onclick="openCpModal('${cpKey}')" style="cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">`+
+                return `<tr data-cpkey="${cpKeyEsc}" style="cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">`+
                     `<td style="color:var(--m);font-size:0.75em">${i.d}</td>`+
                     `<td><span class="badge-report">${i.t}</span></td>`+
                     codCell+
@@ -3545,11 +3569,22 @@
         }
 
         /** Splits fullList into CA/CI counts per bucket. */
-        /** Splits trendSplit into CA/CI counts per bucket. 100% Accurate (entire dataset). */
+        /** Splits trendSplit into CA/CI counts per bucket. 100% Accurate (entire dataset).
+         *  Fallback: se trendSplit não vier do backend, usa stats.trend (total sem distinção CA/CI)
+         *  atribuindo tudo como CI para manter o gráfico funcional. */
         function buildGroupedByType(period) {
             const ca = {}, ci = {};
-            const raw = (stats && stats.trendSplit) ? stats.trendSplit : {};
-            
+
+            // trendSplit = {dateKey: {ca: N, ci: N}} — preenchido pelo backend
+            // Fallback: stats.trend = {dateKey: N} — atribui tudo a CI
+            let raw = {};
+            if (stats && stats.trendSplit && Object.keys(stats.trendSplit).length > 0) {
+                raw = stats.trendSplit;
+            } else if (stats && stats.trend && Object.keys(stats.trend).length > 0) {
+                // Converte stats.trend para formato trendSplit (sem separação CA/CI)
+                Object.entries(stats.trend).forEach(([k, v]) => { raw[k] = { ca: 0, ci: toSafeNumber(v) }; });
+            }
+
             Object.entries(raw).forEach(([iso, val]) => {
                 let bucketKey;
                 if (period === 'year') {

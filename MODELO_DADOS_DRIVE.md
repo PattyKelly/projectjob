@@ -52,6 +52,11 @@ getConsolidatedData()
                  resumo_2026.csv  ◄── 52,4 MB  (carga completa 2026)
 ```
 
+> 📸 **NOTA SOBRE O SCREENSHOT:** A imagem enviada em 09/05/2026 é **apenas um exemplo parcial** da pasta.
+> Existem **mais arquivos** correspondentes a 2025 e 2026 que não aparecem na tela (lista rolável).
+> O padrão de nomenclatura `sherlock_logs_YYYY-MM.json` se repete para todos os meses disponíveis.
+> A lista completa varia conforme as cargas manuais realizadas pela Patty ao longo do tempo.
+
 > ⚠️ **Por que 2025 pesa 90 MB e 2026 pesa 52 MB?**
 > 2025 tem o ano inteiro consolidado. 2026 ainda está em andamento (até mai/2026).
 > Os JSONs mensais (`sherlock_logs_YYYY-MM.json`) são o recorte já processado — mais leves e rápidos.

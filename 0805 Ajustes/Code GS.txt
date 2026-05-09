@@ -1374,7 +1374,7 @@
                     <button class="nav-btn" onclick="switchTab('tabFaq', this)">FAQ & Ajuda</button>
                     <button id="btnTechTab" class="nav-btn" style="display:none;" onclick="switchTab('tabTech', this)">Tech & Diagnóstico</button>
                     <button class="nav-btn" onclick="openFranchiseAccessManager()">Gerenciador de Acessos Franquia</button>
-                    <button id="btnAdminLogs" class="nav-btn" style="display:none;" onclick="switchTab('tabAdmin', this); loadAdminLogs()">Logs Admin</button>
+                    <!-- Logs Admin: removido da nav em 09/05/2026 a pedido da Patty. Tab tabAdmin e função loadAdminLogs() preservados no código caso precise reativar. -->
                 </nav>
 
                 <div class="header-user">

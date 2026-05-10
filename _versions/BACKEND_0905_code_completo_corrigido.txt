@@ -1293,7 +1293,16 @@ function getHomeSnapshotFast() {
     data.canAudit = AUDIT_ALLOWED_EMAILS.includes(activeUser);
 
     if (data.stats) {
-      data.stats.fvcOutsideCurrentCycle = buildFvcOutsideFastFromSnapshot_(data.stats);
+      // Alterado Patty 10/05/2026: não abrir planilha FVC na home — usa semFvcCount do snapshot gerado pelo Python
+      data.stats.fvcOutsideCurrentCycle = data.stats.fvcOutsideCurrentCycle || {
+        success: true,
+        sourceMethod: 'SNAPSHOT_ONLY',
+        totalCpFvc: 0,
+        totalCpForaFvc: Number(data.stats.semFvcCount) || 0,
+        cpForaFvc: [],
+        cpForaFvcTruncado: false,
+        error: ''
+      };
     }
 
     // A home não precisa receber lista gigante

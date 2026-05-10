@@ -1546,27 +1546,43 @@
                 <!-- FILTER BAR -->
                 <div class="card" style="margin-bottom: 30px; padding: 20px;">
                     <div class="filter-header" style="display:flex; flex-wrap:wrap; gap:15px; align-items:center;">
-                        <!-- Hidden inputs required by legacy script logic to avoid errors -->
-                        <select id="periodFilter" style="display:none;"></select>
+                        <!-- periodFilter visível — seletor de mês para Audit Log Explorer -->
+                        <select id="periodFilter" class="f-input" style="min-width:180px; padding:10px 14px;" onchange="loadAuditExplorerPage(1)">
+                            <option value="">📅 Selecione o mês</option>
+                            <optgroup label="2026">
+                                <option value="2026-05">Maio/2026</option>
+                                <option value="2026-04" selected>Abril/2026</option>
+                                <option value="2026-03">Março/2026</option>
+                                <option value="2026-02">Fevereiro/2026</option>
+                                <option value="2026-01">Janeiro/2026</option>
+                            </optgroup>
+                            <optgroup label="2025">
+                                <option value="2025-12">Dezembro/2025</option>
+                                <option value="2025-11">Novembro/2025</option>
+                                <option value="2025-10">Outubro/2025</option>
+                                <option value="2025-09">Setembro/2025</option>
+                                <option value="2025-08">Agosto/2025</option>
+                                <option value="2025-07">Julho/2025</option>
+                                <option value="2025-06">Junho/2025</option>
+                                <option value="2025-05">Maio/2025</option>
+                                <option value="2025-04">Abril/2025</option>
+                                <option value="2025-03">Março/2025</option>
+                                <option value="2025-02">Fevereiro/2025</option>
+                                <option value="2025-01">Janeiro/2025</option>
+                            </optgroup>
+                        </select>
+                        <!-- typeFilter mantido hidden para compatibilidade -->
                         <select id="typeFilter" style="display:none;"></select>
-                        
+
                         <input type="text" id="cpSearch" class="f-input" list="cpList" placeholder="🔍 Pesquisar por CP ou nome..." onkeyup="runFiltersDebounced()" style="flex:1; min-width:250px;">
                         <datalist id="cpList"></datalist>
-                        
-                        <div style="display:flex; gap:12px; align-items:center; background:rgba(255,255,255,0.03); padding:8px 15px; border-radius:14px; border:1px solid var(--border);">
-                            <div style="display:flex; align-items:center; gap:8px;">
-                                <label style="color:var(--m); font-size:0.75em; font-weight:700; text-transform:uppercase;">De:</label>
-                                <input type="date" id="dateFrom" class="f-input" style="padding: 5px; width: 130px; background:none; border:none; color:white;" onchange="runFilters()" value="2026-01-01">
-                            </div>
-                            <div style="width:1px; height:20px; background:var(--border);"></div>
-                            <div style="display:flex; align-items:center; gap:8px;">
-                                <label style="color:var(--m); font-size:0.75em; font-weight:700; text-transform:uppercase;">Até:</label>
-                                <input type="date" id="dateTo" class="f-input" style="padding: 5px; width: 130px; background:none; border:none; color:white;" onchange="runFilters()" value="2026-12-31">
-                            </div>
-                        </div>
+
+                        <!-- Campos de data mantidos hidden para compatibilidade com runFilters/clearFilters -->
+                        <input type="date" id="dateFrom" style="display:none;" value="2026-01-01">
+                        <input type="date" id="dateTo"   style="display:none;" value="2026-12-31">
 
                         <div style="display:flex; gap:10px;">
-                            <button id="btnRefresh" onclick="runFilters()" style="background:var(--p); color:white; border:none; padding:12px 25px; border-radius:14px; cursor:pointer; font-weight:700; display:flex; align-items:center; gap:8px;">
+                            <button id="btnRefresh" onclick="loadAuditExplorerPage(1)" style="background:var(--p); color:white; border:none; padding:12px 25px; border-radius:14px; cursor:pointer; font-weight:700; display:flex; align-items:center; gap:8px;">
                                 <span class="material-icons" style="font-size:18px;">search</span> Localizar
                             </button>
                             <button id="btnClearData" onclick="clearFilters()" title="Limpar filtros" style="background:rgba(255,255,255,0.05); color:white; border:1px solid var(--border); padding:12px 20px; border-radius:14px; cursor:pointer; font-weight:700;">Limpar</button>
@@ -2860,6 +2876,43 @@
                 setLocalizedNumber('franchiseBigValue2026', local.big2026Cut);
                 setTextIfExists('franchiseBigLabel2026', 'Acessos 2026 (CI+CA)');
             }).getFranchiseBigNumber2026();
+        }
+
+        // Alterado Patty - 10/05/2026
+        // Audit Log Explorer sob demanda — lê apenas o mês selecionado no periodFilter
+        let auditExplorerPage = 1;
+        const auditExplorerPageSize = 100;
+
+        function loadAuditExplorerPage(page) {
+            auditExplorerPage = page || 1;
+            const period = document.getElementById('periodFilter').value || '';
+            const type   = document.getElementById('typeFilter').value  || '';
+            const term   = document.getElementById('cpSearch').value    || '';
+
+            if (!period) {
+                showToast('Selecione um mês para consultar o histórico.', '📅');
+                return;
+            }
+
+            const tbody = document.querySelector('#mainTable tbody');
+            if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:30px;color:var(--p)">⏳ Carregando ${period}...</td></tr>`;
+
+            google.script.run
+                .withSuccessHandler(res => {
+                    if (!res || res.success === false) {
+                        showToast(res && res.error ? res.error : 'Erro ao buscar histórico.', '⚠️');
+                        return;
+                    }
+                    fullList = res.list || [];
+                    currentTablePage = 1;
+                    renderTable(fullList);
+                    const info = document.getElementById('tablePaginationInfo');
+                    if (info) info.innerText = `Período ${res.period} · ${res.total.toLocaleString('pt-BR')} registros · Página ${res.page} de ${res.totalPages}`;
+                })
+                .withFailureHandler(err => {
+                    showToast('Falha ao carregar histórico: ' + err.message, '📡');
+                })
+                .api_getAuditExplorerPage({ period, type, term, page: auditExplorerPage, pageSize: auditExplorerPageSize });
         }
 
         function runFiltersDebounced() {

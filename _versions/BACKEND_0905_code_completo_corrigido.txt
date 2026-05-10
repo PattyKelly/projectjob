@@ -1555,10 +1555,95 @@ function getFranchiseBigNumber2026() {
   }
 }
 
-// ====== INTEGRAÃ‡ÃƒO ORGANIZZECI (JSON/BQ) PARA BUSCA DE EMAILS ======
-// FOLDER IDs: Pastas que contÃªm shards JSON e CSVs de auditoria
+// ====== INTEGRAÇÃO ORGANIZZECI (JSON/BQ) PARA BUSCA DE EMAILS ======
+// FOLDER IDs: Pastas que contêm shards JSON e CSVs de auditoria
 const SHARD_FOLDER_ID = '1tIqgxus9VmC3rEaCj9z7JB1rmsahfJ_a';      // Pasta Principal (2026+)
-const SHARD_FOLDER_ID_2025 = '0AOVybAy3QnD3Uk9PVA';               // Pasta HistÃ³rica (2025)
+const SHARD_FOLDER_ID_2025 = '0AOVybAy3QnD3Uk9PVA';               // Pasta Histórica (2025)
+
+/**
+ * Lê um arquivo JSON mensal específico do Sherlock.
+ * Alterado Patty - 10/05/2026
+ * Motivo: permitir consulta histórica 2025/2026 sem carregar todos os meses na home.
+ */
+function readSherlockMonthlyJson_(period) {
+  const p = String(period || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(p)) throw new Error('Período inválido. Use YYYY-MM, exemplo: 2025-01.');
+
+  const fileName = 'sherlock_logs_' + p + '.json';
+  const folderIds = [SHARD_FOLDER_ID, SHARD_FOLDER_ID_2025];
+
+  for (let i = 0; i < folderIds.length; i++) {
+    const folder = DriveApp.getFolderById(folderIds[i]);
+    const files = folder.searchFiles("title = '" + fileName + "' and trashed = false");
+    if (files.hasNext()) {
+      const content = files.next().getBlob().getDataAsString('UTF-8');
+      const json = JSON.parse(content);
+      if (!Array.isArray(json)) throw new Error(fileName + ' não está no formato de lista JSON.');
+      return json;
+    }
+  }
+  return [];
+}
+
+/**
+ * API paginada para o Audit Log Explorer.
+ * Carrega somente o mês selecionado — sem reprocessar tudo.
+ * Alterado Patty - 10/05/2026
+ */
+function api_getAuditExplorerPage(params) {
+  try {
+    const p = params || {};
+    const period   = String(p.period   || '').trim();
+    const page     = Math.max(1, Number(p.page     || 1));
+    const pageSize = Math.min(Math.max(10, Number(p.pageSize || 100)), 300);
+    const term     = String(p.term || '').toLowerCase().trim();
+    const type     = String(p.type || '').trim();
+
+    if (!period) return { success: false, error: 'Selecione um mês para consultar o histórico. Exemplo: 2025-01.' };
+
+    const rows   = readSherlockMonthlyJson_(period);
+    const parsed = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row     = rows[i] || {};
+      const tipoRaw = String(row['TIPO DO REPORT'] || 'Outro').trim();
+      const tipo    = tipoRaw === 'Outro' ? 'Acesso ao Drive' : tipoRaw;
+      const cod     = String(row['COD DO CP']  || 'Unknown').trim();
+      const nome    = String(row['NOME DO CP'] || '').trim();
+      const ator    = String(row['RESPONSÁVEL (ATOR)'] || row['RESPONSAVEL (ATOR)'] || '').trim();
+      const dCtx    = getNativeDateContext(row['DATA'] || '');
+      const dateKey = dCtx ? dCtx.k : '';
+      const fDate   = dCtx ? dCtx.f : String(row['DATA'] || '');
+
+      if (type && tipo !== type) continue;
+      if (term) {
+        const hay   = (cod + ' ' + nome + ' ' + ator).toLowerCase();
+        const words = term.split(/\s+/).filter(Boolean);
+        if (!words.every(w => hay.includes(w))) continue;
+      }
+
+      parsed.push({ t: tipo, c: cod, n: nome, d: fDate, dateKey: dateKey, e: null,
+                    i: String(row['ARQUIVO_LOG'] || ''), v: Number(row['QUANTIDADE DE ACESSOS'] || 1) });
+    }
+
+    parsed.sort((a, b) => {
+      const bk = String(b.dateKey || ''), ak = String(a.dateKey || '');
+      if (bk !== ak) return bk.localeCompare(ak);
+      return String(a.c || '').localeCompare(String(b.c || ''));
+    });
+
+    const total = parsed.length;
+    const start = (page - 1) * pageSize;
+
+    return {
+      success: true, period: period, page: page, pageSize: pageSize,
+      total: total, totalPages: Math.ceil(total / pageSize),
+      list: parsed.slice(start, start + pageSize)
+    };
+  } catch(e) {
+    return { success: false, error: 'Erro ao carregar Audit Log Explorer: ' + e.toString() };
+  }
+}
 
 // NOTA: BigQuery nÃ£o Ã© necessÃ¡rio aqui. Usar apenas Drive para leitura de JSON shards
 // Se precisar BigQuery no futuro, substituir por ID apropriado

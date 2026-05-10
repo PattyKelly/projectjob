@@ -1217,6 +1217,23 @@ function getConsolidatedData(filterParams, forceRefresh = false) {
  * Motivo: impedir que o Apps Script reprocesse JSONs mensais pesados.
  * Agora o snapshot deve ser gerado pelo Python/Colab.
  */
+// Alterado Patty - 10/05/2026
+// Teste rápido: valida se getHomeSnapshotFast está funcional e mede tempo de resposta.
+function admin_testHomeFast() {
+  const ini = Date.now();
+  const res = getHomeSnapshotFast();
+
+  return {
+    success: !(res && res.error),
+    elapsedMs: Date.now() - ini,
+    sourceMethod: res && res.sourceMethod ? res.sourceMethod : '',
+    listLength: res && res.list ? res.list.length : 0,
+    audit: res && res.stats ? res.stats.audit : null,
+    cps: res && res.stats ? res.stats.cps : null,
+    error: res && res.error ? res.error : ''
+  };
+}
+
 function admin_forceRefreshSnapshot() {
   const adminEmails = [
     'patricia.wojciechowski@grupoboticario.com.br',
@@ -1415,42 +1432,58 @@ function sumTrendRange_(trendMap, dateFrom, dateTo) {
   return total;
 }
 
+// Alterado Patty - 10/05/2026
+// Motivo: substituir getConsolidatedData({ light: true }) por getHomeSnapshotFast() — sem mineração pesada.
 function getStrategicAccessView() {
   try {
-    const consolidated = getConsolidatedData({ light: true });
-    if (!consolidated || consolidated.error) {
-      return { error: consolidated && consolidated.error ? consolidated.error : 'Falha ao carregar base consolidada.' };
+    const snapshot = getHomeSnapshotFast();
+
+    if (!snapshot || snapshot.success === false || snapshot.error) {
+      return {
+        success: false,
+        error: snapshot && snapshot.error ? snapshot.error : 'Snapshot indisponível.'
+      };
     }
 
-    const trend = (consolidated.stats && consolidated.stats.trend) ? consolidated.stats.trend : {};
-    const REPORTS_PER_DRIVE_ACCESS = 2;
-    const access2025 = sumTrendRange_(trend, '2025-01-01', '2025-12-31') * REPORTS_PER_DRIVE_ACCESS;
-    const access2026FirstTwoHalfMonths = sumTrendRange_(trend, '2026-01-01', '2026-03-15') * REPORTS_PER_DRIVE_ACCESS;
+    const trend = snapshot.stats && snapshot.stats.trend ? snapshot.stats.trend : {};
+
+    const access2025 = sumTrendRange_(trend, '2025-01-01', '2025-12-31');
+    const access2026FirstTwoHalfMonths = sumTrendRange_(trend, '2026-01-01', '2026-03-15');
 
     return {
       success: true,
       ranges: {
         y2025: access2025,
-        y2026FirstTwoHalfMonths: access2026FirstTwoHalfMonths
+        y2026FirstTwoHalfMonths: access2026FirstTwoHalfMonths,
+        y2026Accumulated: access2026FirstTwoHalfMonths
       },
       labels: {
-        y2025: '2025 (01/01 a 31/12) - CI+CA (x2)',
-        y2026FirstTwoHalfMonths: '2026 (01/01 a 15/03) - CI+CA (x2)'
-      }
+        y2025: '2025 fechado - snapshot CI+CA',
+        y2026FirstTwoHalfMonths: '2026 até 15/03 - snapshot CI+CA',
+        y2026Accumulated: '2026 acumulado - snapshot CI+CA'
+      },
+      sourceMethod: 'SNAPSHOT_FAST_ONLY'
     };
   } catch (e) {
-    return { error: 'Erro ao calcular visao estrategica: ' + e.toString() };
+    return { success: false, error: 'Erro ao calcular visão estratégica via snapshot: ' + e.toString() };
   }
 }
 
+// Alterado Patty - 10/05/2026
+// Motivo: substituir getConsolidatedData por getHomeSnapshotFast() — sem mineração pesada.
 function getYearlyLineAccessSummary() {
   try {
-    const consolidated = getConsolidatedData({ light: true });
-    if (!consolidated || consolidated.error) {
-      return { error: consolidated && consolidated.error ? consolidated.error : 'Falha ao carregar base consolidada.' };
+    const snapshot = getHomeSnapshotFast();
+
+    if (!snapshot || snapshot.success === false || snapshot.error) {
+      return {
+        success: false,
+        error: snapshot && snapshot.error ? snapshot.error : 'Snapshot indisponível.'
+      };
     }
 
-    const trend = (consolidated.stats && consolidated.stats.trend) ? consolidated.stats.trend : {};
+    const trend = snapshot.stats && snapshot.stats.trend ? snapshot.stats.trend : {};
+
     const access2025 = sumTrendRange_(trend, '2025-01-01', '2025-12-31');
     const access2026 = sumTrendRange_(trend, '2026-01-01', '2026-12-31');
 
@@ -1461,12 +1494,13 @@ function getYearlyLineAccessSummary() {
         y2026: access2026
       },
       labels: {
-        y2025: '2025 (linhas CI+CA na base)',
-        y2026: '2026 (linhas CI+CA na base)'
-      }
+        y2025: '2025 via snapshot',
+        y2026: '2026 via snapshot'
+      },
+      sourceMethod: 'SNAPSHOT_FAST_ONLY'
     };
   } catch (e) {
-    return { error: 'Erro ao calcular resumo anual por linhas: ' + e.toString() };
+    return { success: false, error: 'Erro ao calcular resumo anual via snapshot: ' + e.toString() };
   }
 }
 
@@ -1484,29 +1518,35 @@ function isSystemActorEmail_(email) {
   return String(email).indexOf('gserviceaccount.com') > -1;
 }
 
+// Alterado Patty - 10/05/2026 — segunda ocorrência substituída
+// Motivo: esta cópia ainda chamava loadAllJsonMonthlyData_() com leitura pesada.
 function getFranchiseBigNumber2026() {
   try {
-    const jsonResult = loadAllJsonMonthlyData_();
-    if (!jsonResult || !jsonResult.success) {
-      return { error: 'Falha ao ler JSONs mensais para o Big Number 2026.' };
+    const snapshot = getHomeSnapshotFast();
+
+    if (!snapshot || snapshot.success === false || snapshot.error) {
+      return {
+        success: false,
+        error: snapshot && snapshot.error ? snapshot.error : 'Snapshot indisponível.'
+      };
     }
 
-    const activeUser = normalizeActorEmail_(Session.getActiveUser().getEmail());
-    const adminEmails = {
-      'patricia.wojciechowski@grupoboticario.com.br': true,
-      'opatriciakelly@gmail.com': true
+    const trend = snapshot.stats && snapshot.stats.trend ? snapshot.stats.trend : {};
+    const total2026 = sumTrendRange_(trend, '2026-01-01', '2026-12-31');
+
+    return {
+      success: true,
+      year: 2026,
+      baseLines: total2026,
+      total: total2026,
+      multiplier: 1,
+      label: 'Acessos 2026 via snapshot rápido',
+      sourceMethod: 'SNAPSHOT_FAST_ONLY'
     };
-
-    const REPORTS_PER_DRIVE_ACCESS = 2;
-    const cpEmailCache = {};
-    let franchiseLines2026 = 0;
-
-    const rows = Array.isArray(jsonResult.data) ? jsonResult.data : [];
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i] || {};
-      const dCtx = getNativeDateContext(row['DATA']);
-      const dateKey = dCtx ? dCtx.k : '';
-      if (!dateKey || dateKey < '2026-01-01' || dateKey > '2026-12-31') continue;
+  } catch (e) {
+    return { success: false, error: 'Erro ao calcular Big Number 2026 via snapshot: ' + e.toString() };
+  }
+}
 
       const actor = normalizeActorEmail_(row['RESPONSÃVEL (ATOR)'] || row['RESPONSAVEL (ATOR)'] || row['ATOR']);
       if (!actor) continue;
@@ -1701,77 +1741,82 @@ function testDriveAccess() {
 // MOTOR JSON â€” LÃª sherlock_logs_YYYY-MM.json gerados pelo Colab
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+// Alterado Patty - 10/05/2026 — segunda ocorrência substituída
+// Motivo: remover leitura de Google Sheets e CSV — ler SOMENTE JSON mensal oficial.
 function loadAllJsonMonthlyData_() {
   try {
     const folderIds = [SHARD_FOLDER_ID, SHARD_FOLDER_ID_2025];
     let allData = [];
     let fileCount = 0;
-    // PENDING 3 FIX: filtrar apenas arquivos mensais — evita ler snapshots/cache (v59, v6.json)
+
     const MONTHLY_PATTERN = /^sherlock_logs_\d{4}-\d{2}\.json$/i;
 
-    folderIds.forEach(id => {
+    folderIds.forEach(folderId => {
       try {
-        const folder = DriveApp.getFolderById(id);
+        const folder = DriveApp.getFolderById(folderId);
         const files = folder.getFiles();
-        Logger.log('[PASTA] Escaneando: ' + folder.getName());
-        
+
+        Logger.log('[PASTA] Escaneando SOMENTE JSON mensal: ' + folder.getName());
+
         while (files.hasNext()) {
           const file = files.next();
-          const name = file.getName().toLowerCase();
-          const mime = file.getMimeType();
+          const fileName = file.getName();
+
+          if (!MONTHLY_PATTERN.test(fileName)) {
+            Logger.log('[SKIP] ' + fileName + ' — não é JSON mensal oficial');
+            continue;
+          }
+
+          try {
+            const content = file.getBlob().getDataAsString('UTF-8');
+            const json = JSON.parse(content);
+
+            if (!Array.isArray(json)) {
+              Logger.log('[SKIP] ' + fileName + ' — JSON não é array');
+              continue;
+            }
+
+            allData = allData.concat(json);
+            fileCount++;
+            Logger.log('[JSON OK] ' + fileName + ' (' + json.length + ' linhas)');
+
+          } catch (jsonErr) {
+            Logger.log('[ERRO JSON] ' + fileName + ': ' + jsonErr);
+          }
+        }
+
+      } catch (folderErr) {
+        Logger.log('[ERRO PASTA] ' + folderId + ': ' + folderErr);
+      }
+    });
+
+    Logger.log('[OK] JSONs mensais carregados: ' + fileCount + ' arquivos | ' + allData.length + ' registros');
+
+    return {
+      success: true,
+      data: allData,
+      fileCount: fileCount,
+      source: 'JSON_MENSAL_ONLY'
+    };
+
+  } catch (e) {
+    Logger.log('[ERRO] loadAllJsonMonthlyData_ falhou: ' + e);
+
+    return {
+      success: false,
+      error: e.toString(),
+      data: [],
+      fileCount: 0,
+      source: 'JSON_MENSAL_ONLY'
+    };
+  }
+}
 
           // 1. Processa JSON — SOMENTE mensais (exclui snapshots que causam duplicacao)
           if (name.endsWith('.json')) {
             if (!MONTHLY_PATTERN.test(file.getName())) {
               Logger.log('[SKIP] ' + name + ' (nao e mensal — ignorado)');
               continue;
-            }
-            try {
-              const content = file.getBlob().getDataAsString();
-              const json = JSON.parse(content);
-              if (Array.isArray(json)) {
-                allData = allData.concat(json);
-                fileCount++;
-                Logger.log('[JSON OK] ' + name);
-              }
-            } catch(e) { Logger.log('[ERRO JSON] ' + name + ': ' + e); }
-          } 
-          // 2. Processa Google Sheets (MÃºltiplas abas)
-          else if (mime === MimeType.GOOGLE_SHEETS) {
-            const rows = readYearlySummarySheet_(file.getId());
-            if (rows.length > 0) {
-              allData = allData.concat(rows);
-              fileCount++;
-              Logger.log('[SHEET OK] ' + name + ' (' + rows.length + ' linhas)');
-            }
-          }
-          // 3. Processa CSV — pula se ja ha dados suficientes (evita timeout com arquivos 90MB+)
-          else if (name.endsWith('.csv') || mime === MimeType.CSV) {
-            if (allData.length > 5000) {
-              Logger.log('[SKIP CSV] ' + name + ' (dados suficientes de JSON/Sheets — ignorado)');
-              continue;
-            }
-            const rows = readYearlySummaryCsv_(file);
-            if (rows.length > 0) {
-              allData = allData.concat(rows);
-              fileCount++;
-              Logger.log('[CSV OK] ' + name + ' (' + rows.length + ' linhas)');
-            }
-          }
-        }
-      } catch(folderErr) {
-        Logger.log('[ERRO PASTA] ' + id + ': ' + folderErr);
-      }
-    });
-
-    Logger.log('[OK] Carregados ' + fileCount + ' arquivos (' + allData.length + ' registros brutos totais)');
-    return { success: true, data: allData, fileCount: fileCount };
-  } catch(e) {
-    Logger.log('[ERRO] loadAllJsonMonthlyData_ falhou: ' + e);
-    return { success: false, error: e.toString(), data: [] };
-  }
-}
-
 function buildResponseFromJson_(data, filterParams) {
   try {
     const AUDIT_ALLOWED = ['patricia.wojciechowski@grupoboticario.com.br', 'opatriciakelly@gmail.com'];
@@ -1839,29 +1884,32 @@ function buildResponseFromJson_(data, filterParams) {
       const aggKey = cod !== 'Unknown' && cod !== '' ? cod : (nom || 'Unknown');
       const uniqAuditKey = `${aggKey}|${ator}|${dateKey}`;
       
+      // Alterado Patty - 10/05/2026
+      // Motivo: auditValue declarado fora do if para evitar ReferenceError quando chave já existe.
+      let auditValue = 0;
+
       if (!auditSeen.has(uniqAuditKey) && ator && ator !== 'unknown') {
         auditSeen.add(uniqAuditKey);
-        
+
         // Multiplicador Dinâmico baseada em Produtos (Checklist Item 4)
         const normCod = normalizeCpCode_(cod);
-        const prods = cpProductMap[normCod] || 'CI'; 
+        const prods = cpProductMap[normCod] || 'CI';
         const multiplier = (prods.includes('CI') && prods.includes('CA')) ? 2 : 1;
-        const auditValue = 1 * multiplier; 
+        auditValue = multiplier;
 
         audit += auditValue;
 
         cpAgg[aggKey] = (cpAgg[aggKey] || 0) + auditValue;
-        
-        if (cod !== 'Unknown') { 
-          cpNames[cod] = nom; 
-          sugs.add(cod); 
+
+        if (cod !== 'Unknown') {
+          cpNames[cod] = nom;
+          sugs.add(cod);
         }
-        // Apenas Código (Melhoria Solicitada 09/05)
 
         if (dateKey) trend[dateKey] = (trend[dateKey] || 0) + auditValue;
       }
 
-      if (resultData.length < limitList - 1) {
+      if (resultData.length < limitList - 1 && auditValue > 0) {
         const regAuditado = canAudit ? ator : null;
         resultData.push({ t: tipo, c: cod, n: nom, d: fDate, e: regAuditado, i: String(row['ARQUIVO_LOG'] || ''), v: auditValue });
       }

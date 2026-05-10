@@ -2992,63 +2992,11 @@
 
         // clearFilters() definida acima — duplicata removida Patty 10/05/2026
 
+        // Alterado Patty - 10/05/2026
+        // Motivo: runFilters não pode chamar getConsolidatedData diretamente.
+        // Todo o Explorer agora passa por api_getAuditExplorerPage (leitura por mês sob demanda).
         function runFilters() {
-            const btn = document.getElementById('btnRefresh');
-            const term = (document.getElementById('cpSearch').value || '').trim();
-
-            // SEM TERMO: avisa e PARA — não chama backend (evita mineração infinita de 50MB+)
-            if (!term || term.length < 2) {
-                if (btn) { btn.innerText = '🔍 Pesquisar'; btn.style.opacity = '1'; }
-                const colCount = canAudit ? 5 : 4;
-                document.querySelector('#mainTable tbody').innerHTML =
-                    `<tr><td colspan="${colCount}" style="text-align:center;padding:30px;color:var(--m)">⚠️ Por favor, digite o Código ou Nome do CP para localizar os logs.</td></tr>`;
-                document.getElementById('filterLabel').innerText = '';
-                return; // ← BLOQUEIA chamada ao backend sem termo
-            }
-
-            if (btn) {
-                btn.innerHTML = '<span class="material-icons" style="font-size:18px; animation: spin 1s linear infinite;">sync</span> Minerando...';
-                btn.style.opacity = "0.7";
-            }
-            const colCount = canAudit ? 5 : 4;
-            document.querySelector('#mainTable tbody').innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding:30px; color:var(--p); font-weight:600">⏳ Carregando dados de auditoria...</td></tr>`;
-
-            const p = {
-                period:   document.getElementById('periodFilter').value,
-                type:     document.getElementById('typeFilter').value,
-                term:     term,
-                dateFrom: document.getElementById('dateFrom').value,
-                dateTo:   document.getElementById('dateTo').value
-            };
-
-            google.script.run.withSuccessHandler(res => {
-                btn.innerText = "🔍 Pesquisar";
-                btn.style.opacity = "1";
-                if (res.error) { alert("Erro ao filtrar: " + res.error); return; }
-                fullList = Array.isArray(res.list) ? res.list : [];
-                stats = res.stats || {};
-            if (stats && stats.lastUpdate && res.canAudit) {
-                const d = new Date(stats.lastUpdate);
-                document.getElementById('lastUpdateBtn').style.display = 'block';
-                document.getElementById('lastUpdate').style.display = 'none';
-                document.getElementById('lastUpdate').innerText = d.toLocaleString();
-                document.getElementById('lastUpdateArrow').textContent = '▶';
-            } else {
-                document.getElementById('lastUpdateBtn').style.display = 'none';
-                document.getElementById('lastUpdate').style.display = 'none';
-            }
-            if (res.canAudit) {
-                document.getElementById('btnSync').style.display = 'block';
-            }
-                // Label de filtro ativo
-                const parts = [];
-                if (p.period) parts.push(`Mês ${p.period}`);
-                if (p.type) parts.push(p.type);
-                if (p.term) parts.push(`"${p.term}"`);
-                if (p.dateFrom || p.dateTo) parts.push(`${p.dateFrom||'início'} → ${p.dateTo||'hoje'}`);
-                document.getElementById('filterLabel').innerText = parts.length ? `— Filtro: ${parts.join(' | ')}` : '';
-                renderData();
-            }).getConsolidatedData(p);
+            loadAuditExplorerPage(1);
         }
 
         function renderTable(items) {

@@ -1765,11 +1765,6 @@ function loadAllJsonMonthlyData_() {
   }
 }
 
-          // 1. Processa JSON — SOMENTE mensais (exclui snapshots que causam duplicacao)
-          if (name.endsWith('.json')) {
-            if (!MONTHLY_PATTERN.test(file.getName())) {
-              Logger.log('[SKIP] ' + name + ' (nao e mensal — ignorado)');
-              continue;
 function buildResponseFromJson_(data, filterParams) {
   try {
     const AUDIT_ALLOWED = ['patricia.wojciechowski@grupoboticario.com.br', 'opatriciakelly@gmail.com'];

@@ -3436,7 +3436,7 @@
                 <tr>
                     <td style="color:var(--m); font-size:0.8em">${i.d}</td>
                     <td><span class="badge-report">${i.t}</span></td>
-                    <td style="font-size:0.8em; color:var(--m); font-style:italic">${maskEmail(i.e) || '—'}</td>
+                    <td style="font-size:0.8em; color:var(--m); font-style:italic">${i.e || '—'}</td>
                 </tr>
             `).join('');
 

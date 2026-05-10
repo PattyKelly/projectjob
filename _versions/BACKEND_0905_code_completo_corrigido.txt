@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Dashboard de Auditoria de Acessos - Backend (v5.1 Super-Performance)
  * RESOLUÃ‡ÃƒO: Processamento de 350k+ linhas via AgregaÃ§Ã£o Total
  * 
@@ -1545,53 +1545,6 @@ function getFranchiseBigNumber2026() {
     };
   } catch (e) {
     return { success: false, error: 'Erro ao calcular Big Number 2026 via snapshot: ' + e.toString() };
-  }
-}
-
-      const actor = normalizeActorEmail_(row['RESPONSÃVEL (ATOR)'] || row['RESPONSAVEL (ATOR)'] || row['ATOR']);
-      if (!actor) continue;
-      if (activeUser && actor === activeUser) continue;
-      if (adminEmails[actor]) continue;
-      if (isSystemActorEmail_(actor)) continue;
-
-      const cod = String(row['COD DO CP'] || '').trim().toUpperCase();
-      let isFranchiseEmail = false;
-
-      if (cod && cod !== 'UNKNOWN') {
-        if (cpEmailCache[cod] === undefined) {
-          cpEmailCache[cod] = fetchDbEmails_Unified_(cod);
-        }
-
-        const knownEmails = cpEmailCache[cod] || [];
-        if (knownEmails.length > 0) {
-          for (let j = 0; j < knownEmails.length; j++) {
-            if (knownEmails[j] === actor) {
-              isFranchiseEmail = true;
-              break;
-            }
-          }
-        } else {
-          // Sem cadastro de e-mails para o CP, usa fallback por e-mail vÃ¡lido nÃ£o-admin.
-          isFranchiseEmail = actor.indexOf('@') > 0;
-        }
-      } else {
-        isFranchiseEmail = actor.indexOf('@') > 0;
-      }
-
-      if (!isFranchiseEmail) continue;
-      franchiseLines2026 += 1;
-    }
-
-    return {
-      success: true,
-      year: 2026,
-      baseLines: franchiseLines2026,
-      total: franchiseLines2026 * REPORTS_PER_DRIVE_ACCESS,
-      multiplier: REPORTS_PER_DRIVE_ACCESS,
-      label: 'Big Number 2026 (franquias, exclui seu acesso) - CI+CA (x2)'
-    };
-  } catch (e) {
-    return { error: 'Erro ao calcular Big Number 2026 de franquias: ' + e.toString() };
   }
 }
 

@@ -1583,13 +1583,8 @@ function buildResponseFromJson_(data, filterParams) {
     };
     const limitList = 3000;
 
-    // Alterado Patty - 10/05/2026
-    // Motivo: Audit Log Explorer deve iniciar pelo registro mais recente.
-    // Importante: ordenar antes do limitList, senão o front pode receber 3.000 linhas antigas.
-    const orderedData = sortJsonRowsByAuditDateDesc_(data);
-
-    for (let i = 0; i < orderedData.length; i++) {
-      const row = orderedData[i];
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
       const tipoRaw = String(row['TIPO DO REPORT'] || 'Outro').trim();
       const tipo = tipoRaw === 'Outro' ? 'Acesso ao Drive' : tipoRaw;
       const cod  = String(row['COD DO CP'] || 'Unknown').trim();
@@ -1746,7 +1741,11 @@ function buildResponseFromJson_(data, filterParams) {
         cpNames: cpNames,
         lastUpdate: new Date().toISOString()
       },
-      list: resultData
+      // Alterado Patty - 10/05/2026: sort só nos 3.000 itens já processados (campo d = DD/MM/YYYY)
+      list: resultData.slice().sort((a, b) => {
+        const toIso = d => { const p = String(d||'').split('/'); return p.length===3 ? p[2]+p[1]+p[0] : String(d||''); };
+        return toIso(b.d).localeCompare(toIso(a.d));
+      })
     };
 //   list: resultData
 // };

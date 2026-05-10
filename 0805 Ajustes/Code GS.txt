@@ -2384,6 +2384,8 @@
                      document.getElementById('dateTo').value = isoToday;
                      document.getElementById('opDateFrom').value = "2026-01-01";
                      document.getElementById('opDateTo').value = isoToday;
+                     // Histórico temporal: padrão Abril (último mês completo antes da migração 05/05)
+                     document.getElementById('periodFilter').value = '2026-04';
 
                      const btn = document.getElementById('btnLP');
                      if (btn) btn.classList.add('ready');
@@ -3505,6 +3507,10 @@
             `;
 
             const win = window.open('', '_blank', 'width=900,height=700');
+            if (!win) {
+                alert('⚠️ O navegador bloqueou o popup de impressão.\nVá em Configurações → Privacidade → Permitir popups para este site e tente novamente.');
+                return;
+            }
             win.document.write(html);
             win.document.close();
             win.focus();

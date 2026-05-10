@@ -1641,16 +1641,18 @@ function buildResponseFromJson_(data, filterParams) {
     const semFvcCount = fvcMetadata.semFvcCount;
 
     const totalCps = Object.keys(cpAgg).length;
-    // BLOCO 2 FIX: usar variável 'audit' que já acumula com multiplicador dinâmico (×1 ou ×2)
-    const auditTotal = audit;
+    // CHECKLIST 09/05: forçar ×2 no Big Number (E-mails Únicos × 2 = CI+CA consolidado)
+    const auditTotal = auditSeen.size * 2;
 
-    // BLOCO 3 FIX: audit2025/2026 calculados a partir do trend (já com multiplicador correto)
+    // BLOCO 3 FIX: audit2025/2026 com força ×2 por entrada única (igual ao path Sheets)
     let audit2025 = 0;
     let audit2026 = 0;
-    for (const dk in trend) {
-      if (dk.startsWith('2025')) audit2025 += trend[dk];
-      else if (dk.startsWith('2026')) audit2026 += trend[dk];
-    }
+    auditSeen.forEach(key => {
+      const parts = key.split('|');
+      const dateKey = parts[2];
+      if (dateKey && dateKey.startsWith('2025')) audit2025 += 2;
+      else if (dateKey && dateKey.startsWith('2026')) audit2026 += 2;
+    });
 
     // BLOCO 4 FIX: qualityTotal dinâmico — CPs com e-mail válido / total carteira FVC
     const fvcCatalog = getCurrentFvcCycleCatalog_();
@@ -2045,11 +2047,11 @@ function getFvcMetadata_() {
       const cod = normalizeCpCode_(data[i][0]);
       const prod = String(data[i][2]).trim().toUpperCase();
       if (cod) map[cod] = prod;
-      if (prod === 'SEM FVC') semFvcCount++;
+      if (prod === 'SEM FVC' || prod.includes('SEM FVC')) semFvcCount++;
     }
     
     const result = { map: map, semFvcCount: semFvcCount };
-    cache.put("FVC_METADATA_CACHE", JSON.stringify(result), 3600); // 1 hora
+    cache.put("FVC_METADATA_CACHE", JSON.stringify(result), 600); // 10 min — releitura frequente
     return result;
   } catch (e) {
     console.error("Erro ao carregar metadados FVC:", e);

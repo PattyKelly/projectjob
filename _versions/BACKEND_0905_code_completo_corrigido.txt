@@ -1592,6 +1592,10 @@ function api_getAuditExplorerPage(params) {
     const term     = String(p.term || '').toLowerCase().trim();
     const type     = String(p.type || '').trim();
 
+    const AUDIT_ALLOWED = ['patricia.wojciechowski@grupoboticario.com.br', 'opatriciakelly@gmail.com'];
+    let canAudit = false;
+    try { canAudit = AUDIT_ALLOWED.some(ae => Session.getActiveUser().getEmail().toLowerCase() === ae); } catch(e) {}
+
     if (!period) return { success: false, error: 'Selecione um mês para consultar o histórico. Exemplo: 2025-01.' };
 
     const rows   = readSherlockMonthlyJson_(period);
@@ -1623,7 +1627,8 @@ function api_getAuditExplorerPage(params) {
         if (!words.every(w => hay.includes(w))) continue;
       }
 
-      parsed.push({ t: tipo, c: cod, n: nome, d: fDate, dateKey: dateKey, e: null,
+      parsed.push({ t: tipo, c: cod, n: nome, d: fDate, dateKey: dateKey,
+                    e: canAudit ? ator : null,
                     i: String(row['ARQUIVO_LOG'] || ''), v: Number(row['QUANTIDADE DE ACESSOS'] || 1) });
     }
 

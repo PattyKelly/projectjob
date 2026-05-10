@@ -1394,7 +1394,7 @@
                     <div class="overview-toolbar">
                         <div class="title">Briefing executivo Sherlock <span style="font-size:0.5em; opacity:0.5;">v8.4</span></div>
                         <div style="display:flex; align-items:center; gap:15px;">
-                            <button onclick="runFilters()" class="dashboard-refresh-btn" title="Atualizar dados do Dashboard">
+                            <button onclick="loadHomeFast()" class="dashboard-refresh-btn" title="Atualizar dados do Dashboard">
                                 🔄 <span>Atualizar</span>
                             </button>
                             <div class="meta">📅 <span id="overviewToday">--/--/----</span></div>
@@ -2206,18 +2206,23 @@
 
         // LIMPAR FILTROS
         function clearFilters() {
-            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('cpSearch').value = '';
             document.getElementById('periodFilter').value = '';
             document.getElementById('typeFilter').value = '';
-            document.getElementById('cpSearch').value = '';
-            document.getElementById('dateFrom').value = '2026-01-01'; // nunca apagar — padrão correto
+
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('dateFrom').value = '2026-01-01';
             document.getElementById('dateTo').value = today;
+
             const filterLabel = document.getElementById('filterLabel');
             if (filterLabel) filterLabel.innerText = '';
-            // Não chama runFilters() — sem CP digitado não faz sentido buscar
+
             const colCount = canAudit ? 5 : 4;
             document.querySelector('#mainTable tbody').innerHTML =
-                `<tr><td colspan="${colCount}" style="text-align:center;padding:30px;color:var(--m)">⚠️ Por favor, digite o Código ou Nome do CP para localizar os logs.</td></tr>`;
+                `<tr><td colspan="${colCount}" style="text-align:center;padding:30px;color:var(--m)">⚠️ Selecione um mês ou digite o Código/Nome do CP para localizar os logs.</td></tr>`;
+
+            const pagination = document.getElementById('tablePagination');
+            if (pagination) pagination.style.display = 'none';
         }
 
         // GERAR ONEPAGE DIRETO DA NUVEM
@@ -2413,14 +2418,19 @@
          };
 
          function enterApp() {
-             // Anima a saída da Landing Page e exibe o dashboard
+             // Alterado Patty - 10/05/2026
+             // Motivo: a home não pode chamar loadHeavyDashboard/getConsolidatedData.
+             // A abertura deve ler apenas o snapshot rápido gerado pelo Python.
              document.getElementById('landingPage').classList.add('fade-out');
+
              setTimeout(() => {
                  document.getElementById('landingPage').style.display = 'none';
                  document.getElementById('appShell').style.display = 'flex';
-                 // Somente agora carregamos os dados pesados
+
                  document.getElementById('loadingOverlay').style.display = 'flex';
-                 loadHeavyDashboard();
+                 document.getElementById('loadingOverlay').classList.remove('fadeout');
+
+                 loadHomeFast();
              }, 800);
          }
 
@@ -2437,6 +2447,66 @@
                 : "Carregando base consolidada...";
             
             loadHeavyDashboard(period);
+        }
+
+        function loadHomeFast() {
+            console.log('[loadHomeFast] Carregando somente snapshot rápido da home...');
+
+            google.script.run
+                .withSuccessHandler(res => {
+                    console.log('[loadHomeFast] Resposta:', res);
+
+                    if (!res || res.error || res.success === false) {
+                        hideLoading();
+                        showToast(
+                            res && res.error
+                                ? res.error
+                                : 'Snapshot rápido não encontrado. Gere o sherlock_v59_snapshot.json pelo Python.',
+                            '⚠️'
+                        );
+                        return;
+                    }
+
+                    fullList = Array.isArray(res.list) ? res.list : [];
+                    stats = res.stats || {};
+                    canAudit = !!res.canAudit;
+
+                    if (stats && stats.lastUpdate && res.canAudit) {
+                        const d = new Date(stats.lastUpdate);
+                        document.getElementById('lastUpdateBtn').style.display = 'block';
+                        document.getElementById('lastUpdate').style.display = 'none';
+                        document.getElementById('lastUpdate').innerText = d.toLocaleString();
+                        document.getElementById('lastUpdateArrow').textContent = '▶';
+                    }
+
+                    if (res.canAudit) {
+                        document.getElementById('btnSync').style.display = 'block';
+                    }
+
+                    const safeStep = (label, fn) => {
+                        try { fn(); }
+                        catch (err) { console.error(`[UI:${label}]`, err); }
+                    };
+
+                    // Home rápida: só renderiza o que já veio no snapshot.
+                    safeStep('initUI', initUI);
+                    safeStep('renderData', renderData);
+                    safeStep('renderAnalytics', renderAnalytics);
+                    safeStep('renderPendingFranchiseEmailPanel', renderPendingFranchiseEmailPanel);
+
+                    // Importante: NÃO chamar rotas pesadas na abertura.
+                    // loadStrategicComparison();
+                    // loadAnnualLineSummary();
+                    // loadFranchiseBigNumber2026();
+                    // ensureBigNumbersFromDirectRanges();
+
+                    hideLoading();
+                })
+                .withFailureHandler(err => {
+                    hideLoading();
+                    showToast('Falha ao carregar snapshot rápido: ' + err.message, '📡');
+                })
+                .getHomeSnapshotFast();
         }
 
         function loadHeavyDashboard(period = null) {
@@ -2920,15 +2990,7 @@
             searchTimeout = setTimeout(runFilters, 900);
         }
 
-        function clearFilters() {
-            document.getElementById('cpSearch').value = '';
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('dateFrom').value = '2026-01-01';
-            document.getElementById('dateTo').value = today;
-            const filterLabel = document.getElementById('filterLabel');
-            if (filterLabel) filterLabel.innerText = '';
-            runFilters();
-        }
+        // clearFilters() definida acima — duplicata removida Patty 10/05/2026
 
         function runFilters() {
             const btn = document.getElementById('btnRefresh');
@@ -3788,10 +3850,9 @@
                 document.getElementById('anTotalAcessos').innerText = '—';
                 document.getElementById('anTotalCPs').innerText = '—';
                 document.getElementById('anTotalDispo').innerText = '—';
-                // Tenta carregar automaticamente se ainda não carregou
-                if (typeof loadHeavyDashboard === 'function' && fullList.length === 0) {
-                    loadHeavyDashboard();
-                }
+                // Alterado Patty - 10/05/2026
+                // Motivo: renderAnalytics não pode chamar loadHeavyDashboard automaticamente,
+                // pois isso reabre o motor pesado da home.
                 return;
             }
             const emptyEl = document.getElementById('anChartEmpty');

@@ -2253,7 +2253,8 @@
                     const cpItems = res.list;
                     const nome = cpItems[0].n;
                     const cod = cpItems[0].c;
-                    const total = cpItems.length;
+                    // BLOCO 6 FIX: total = soma dos valores auditados (v) — reflete multiplicador ×1 ou ×2
+                    const total = cpItems.reduce((acc, i) => acc + (Number(i.v) || 1), 0);
                     
                     const uniqueDates = new Set();
                     cpItems.forEach(i => uniqueDates.add(i.d));
@@ -3657,16 +3658,23 @@
         function renderTrendSummary() {
             if (!stats || !stats.trend) return;
             const trend = stats.trend;
-            let y2025 = 0, y2026 = 0;
             const monthly = {};
 
+            // BLOCO 7 FIX: prioriza audit2025/2026 do servidor (já com multiplicador ×1/×2 correto)
+            // Fallback: recalcula localmente a partir do trend
+            let y2025 = toSafeNumber(stats.audit2025) || 0;
+            let y2026 = toSafeNumber(stats.audit2026) || 0;
+            if (!y2025 && !y2026) {
+                Object.keys(trend).forEach(date => {
+                    const val = toSafeNumber(trend[date]);
+                    if (date.startsWith('2025')) y2025 += val;
+                    if (date.startsWith('2026')) y2026 += val;
+                });
+            }
+
             Object.keys(trend).forEach(date => {
-                const val = toSafeNumber(trend[date]);
-                if (date.startsWith('2025')) y2025 += val;
-                if (date.startsWith('2026')) y2026 += val;
-                
-                const monthKey = date.substring(0, 7); // YYYY-MM
-                monthly[monthKey] = (monthly[monthKey] || 0) + val;
+                const monthKey = date.substring(0, 7);
+                monthly[monthKey] = (monthly[monthKey] || 0) + toSafeNumber(trend[date]);
             });
 
             setLocalizedNumber('summary2025', y2025);

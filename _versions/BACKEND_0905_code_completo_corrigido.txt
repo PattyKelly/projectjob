@@ -1211,15 +1211,142 @@ function getConsolidatedData(filterParams, forceRefresh = false) {
 /**
  * FunÃ§Ã£o Administrativa para forÃ§ar a atualizaÃ§Ã£o do Banco de Dados JSON
  */
+/**
+ * Admin Refresh Seguro
+ * Alterado Patty - 10/05/2026
+ * Motivo: impedir que o Apps Script reprocesse JSONs mensais pesados.
+ * Agora o snapshot deve ser gerado pelo Python/Colab.
+ */
 function admin_forceRefreshSnapshot() {
-  const adminEmails = ['patricia.wojciechowski@grupoboticario.com.br', 'opatriciakelly@gmail.com'];
+  const adminEmails = [
+    'patricia.wojciechowski@grupoboticario.com.br',
+    'opatriciakelly@gmail.com'
+  ];
   const activeUser = Session.getActiveUser().getEmail().toLowerCase();
-  
   if (!adminEmails.includes(activeUser)) {
-      throw new Error("AÃ§Ã£o permitida apenas para Administradores.");
+    throw new Error('Ação permitida apenas para Administradores.');
   }
-  
-  return getConsolidatedData(null, true);
+
+  const snapshot = getHomeSnapshotFast();
+  if (!snapshot || snapshot.error) {
+    return {
+      success: false,
+      error: snapshot && snapshot.error
+        ? snapshot.error
+        : 'Snapshot não encontrado. Execute o Colab para gerar ' + CACHE_FILE_NAME + '.'
+    };
+  }
+  return {
+    success: true,
+    message: 'Snapshot validado com sucesso. Nenhum reprocessamento pesado foi executado no Apps Script.',
+    loadedAt: new Date().toISOString(),
+    stats: snapshot.stats || {},
+    sourceMethod: snapshot.sourceMethod || 'SNAPSHOT_FAST_ONLY'
+  };
+}
+
+/**
+ * Home rápida — lê apenas o snapshot pronto.
+ * Alterado Patty - 10/05/2026
+ * Motivo: impedir que a página inicial reprocesse JSON/Sheets/CSV e demore minutos.
+ */
+function getHomeSnapshotFast() {
+  try {
+    const folder = DriveApp.getFolderById(SHARD_FOLDER_ID);
+    const files = folder.searchFiles("title = '" + CACHE_FILE_NAME + "' and trashed = false");
+
+    if (!files.hasNext()) {
+      return {
+        success: false,
+        error: 'Snapshot não encontrado. Gere o arquivo ' + CACHE_FILE_NAME + ' pelo Colab.',
+        sourceMethod: 'SNAPSHOT_FAST_ONLY'
+      };
+    }
+
+    const file = files.next();
+    const content = file.getBlob().getDataAsString('UTF-8');
+    const data = JSON.parse(content);
+
+    const AUDIT_ALLOWED_EMAILS = [
+      'patricia.wojciechowski@grupoboticario.com.br',
+      'opatriciakelly@gmail.com'
+    ];
+    let activeUser = '';
+    try { activeUser = Session.getActiveUser().getEmail().toLowerCase(); } catch(e) {}
+    data.canAudit = AUDIT_ALLOWED_EMAILS.includes(activeUser);
+
+    if (data.stats) {
+      data.stats.fvcOutsideCurrentCycle = buildFvcOutsideFastFromSnapshot_(data.stats);
+    }
+
+    // A home não precisa receber lista gigante
+    if (Array.isArray(data.list)) {
+      data.list = data.list.slice(0, 300);
+      data.isLimited = true;
+    }
+
+    data.success = true;
+    data.sourceMethod = 'SNAPSHOT_FAST_ONLY';
+    data.loadedAt = new Date().toISOString();
+    return data;
+
+  } catch(e) {
+    return {
+      success: false,
+      error: 'Erro ao carregar snapshot rápido: ' + e.toString(),
+      sourceMethod: 'SNAPSHOT_FAST_ONLY'
+    };
+  }
+}
+
+/**
+ * Calcula CPs fora da carteira FVC sem buscar e-mails por CP.
+ * Alterado Patty - 10/05/2026
+ * Motivo: evitar chamada pesada na abertura.
+ */
+function buildFvcOutsideFastFromSnapshot_(stats) {
+  try {
+    const catalog = getCurrentFvcCycleCatalog_();
+    if (!catalog || !catalog.success) {
+      return {
+        success: false, totalCpFvc: 0, totalCpForaFvc: 0, cpForaFvc: [],
+        error: catalog && catalog.error ? catalog.error : 'Carteira FVC indisponível.'
+      };
+    }
+
+    const cpUniverseCodes = Array.isArray(stats && stats.cpUniverseCodes) ? stats.cpUniverseCodes : [];
+    const cpNames = (stats && stats.cpNames) ? stats.cpNames : {};
+    const uniq = {};
+    const outside = [];
+
+    cpUniverseCodes.forEach(codRaw => {
+      const cod = normalizeCpCode_(codRaw);
+      if (cod) uniq[cod] = true;
+    });
+
+    Object.keys(uniq).forEach(cod => {
+      if (catalog.byCode && catalog.byCode[cod]) return;
+      outside.push({ cod: cod, nome: String(cpNames[cod] || '').trim() });
+    });
+
+    outside.sort((a, b) => String(a.cod).localeCompare(String(b.cod), 'pt-BR'));
+
+    return {
+      success: true,
+      sourceUrl: catalog.sourceUrl,
+      sheetName: catalog.sheetName,
+      totalCpFvc: Number(catalog.totalCp) || 0,
+      totalCpForaFvc: outside.length,
+      cpForaFvc: outside.slice(0, 200),
+      cpForaFvcTruncado: outside.length > 200,
+      error: ''
+    };
+  } catch(e) {
+    return {
+      success: false, totalCpFvc: 0, totalCpForaFvc: 0, cpForaFvc: [],
+      error: 'Erro no cálculo rápido de CPs fora FVC: ' + e.toString()
+    };
+  }
 }
 
 /**

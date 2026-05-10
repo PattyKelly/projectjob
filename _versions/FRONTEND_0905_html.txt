@@ -3401,16 +3401,7 @@
             });
             
             if (cpItems.length === 0) {
-                if (skipRemoteFallback) return;
-                google.script.run
-                    .withSuccessHandler(res => {
-                        const freshItems = res && Array.isArray(res.list) ? res.list : [];
-                        if (freshItems.length === 0) return;
-                        fullList = fullList.concat(freshItems);
-                        openCpModal(cpName, true);
-                    })
-                    .withFailureHandler(() => {})
-                    .getCpEvidenceData(cpName, dFrom, dTo);
+                showToast('Resumo simbólico não está no recorte rápido da home. Para evidência completa, use o menu Comprovante PDF com o período desejado.', '🔎');
                 return;
             }
 

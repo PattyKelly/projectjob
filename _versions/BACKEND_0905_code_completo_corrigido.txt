@@ -2002,6 +2002,62 @@ function extractEvidenceSearchCode_(value) {
   return normalizeCpCode_(match ? match[0] : raw);
 }
 
+// Alterado Patty 10/05/2026: helpers para comprovante leve por período
+function getEvidencePeriodsFromRange_(dateFrom, dateTo) {
+  const from = String(dateFrom || '').trim();
+  const to = String(dateTo || '').trim();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) {
+    throw new Error('Informe a data inicial para buscar o comprovante de forma otimizada.');
+  }
+
+  const startParts = from.split('-');
+  const endValue = /^\d{4}-\d{2}-\d{2}$/.test(to) ? to : from;
+  const endParts = endValue.split('-');
+
+  let y = Number(startParts[0]);
+  let m = Number(startParts[1]);
+  const endY = Number(endParts[0]);
+  const endM = Number(endParts[1]);
+  const periods = [];
+
+  while (y < endY || (y === endY && m <= endM)) {
+    periods.push(String(y) + '-' + String(m).padStart(2, '0'));
+    m++;
+    if (m > 12) { m = 1; y++; }
+    if (periods.length > 24) throw new Error('Período muito amplo para comprovante. Selecione uma janela menor.');
+  }
+
+  return periods;
+}
+
+function loadJsonMonthlyDataByPeriods_(periods) {
+  const folder2026 = DriveApp.getFolderById(SHARD_FOLDER_ID);
+  const folder2025 = DriveApp.getFolderById('0AOVybAy3QnD3Uk9PVA');
+  const rows = [];
+  const wanted = Array.isArray(periods) ? periods : [];
+
+  for (let p = 0; p < wanted.length; p++) {
+    const period = String(wanted[p] || '').trim();
+    if (!/^\d{4}-\d{2}$/.test(period)) continue;
+
+    const fileName = 'sherlock_logs_' + period + '.json';
+    const folder = period.startsWith('2025') ? folder2025 : folder2026;
+    const files = folder.getFilesByName(fileName);
+    if (!files.hasNext()) continue;
+
+    try {
+      const content = files.next().getBlob().getDataAsString('UTF-8');
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) { for (let i = 0; i < parsed.length; i++) rows.push(parsed[i]); }
+    } catch (e) {
+      Logger.log('[WARN] Falha ao ler ' + fileName + ': ' + e);
+    }
+  }
+
+  return { success: true, data: rows };
+}
+
 function getCpEvidenceData(cpInput, dateFrom, dateTo) {
   try {
     const raw = String(cpInput || '').trim();
@@ -2013,11 +2069,14 @@ function getCpEvidenceData(cpInput, dateFrom, dateTo) {
     const from = String(dateFrom || '').trim();
     const to = String(dateTo || '').trim();
 
-    const jsonResult = loadAllJsonMonthlyData_();
+    // Alterado Patty 10/05/2026: lê somente os meses do período informado
+    const periods = getEvidencePeriodsFromRange_(from, to);
+    const jsonResult = loadJsonMonthlyDataByPeriods_(periods);
     if (!jsonResult || !jsonResult.success) {
-      return { error: 'Falha ao ler JSONs mensais para emissao do comprovante.' };
+      return { error: 'Falha ao ler JSONs mensais para emissão do comprovante.' };
     }
-    const cpProductMap = getCpProductMap_(); // Mapeamento dinâmico de produtos
+    // Sem leitura de produto/FVC — cada linha representa evidência real do log
+    const cpProductMap = {};
 
     const AUDIT_ALLOWED = ['patricia.wojciechowski@grupoboticario.com.br', 'opatriciakelly@gmail.com'];
     let canAudit = false;
@@ -2071,9 +2130,8 @@ function getCpEvidenceData(cpInput, dateFrom, dateTo) {
       let auditValue = 0;
       if (!auditSeen.has(uniqKey) && actor && actor !== 'unknown') {
         auditSeen.add(uniqKey);
-        const prods = cpProductMap[codNorm] || 'CI';
-        const multiplier = (prods.includes('CI') && prods.includes('CA')) ? 2 : 1;
-        auditValue = 1 * multiplier;
+        // Comprovante otimizado: cada linha é evidência real do log, sem FVC/produto
+        auditValue = parseFloat(row['QUANTIDADE DE ACESSOS']) || 1;
       }
 
       list.push({

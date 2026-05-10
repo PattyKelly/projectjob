@@ -483,6 +483,18 @@ function buildFvcOutsideInsight_(cpUniverseCodes, cpNameByCode, cpUnresolvedLabe
     outside.sort((a, b) => a.cod.localeCompare(b.cod, 'pt-BR'));
   }
 
+  // PENDING 1 — "Nunca Acessou": CPs da carteira FVC que NÃO aparecem nos logs
+  const neverAccessed = [];
+  if (catalog.success && catalog.list) {
+    for (let i = 0; i < catalog.list.length; i++) {
+      const cp = catalog.list[i];
+      if (!cp || !cp.cod) continue;
+      if (uniq[cp.cod]) continue; // já apareceu nos logs
+      neverAccessed.push({ cod: cp.cod, nome: cp.nome || '' });
+    }
+    neverAccessed.sort((a, b) => a.cod.localeCompare(b.cod, 'pt-BR'));
+  }
+
   return {
     success: !!catalog.success,
     sourceUrl: catalog.sourceUrl,
@@ -494,6 +506,9 @@ function buildFvcOutsideInsight_(cpUniverseCodes, cpNameByCode, cpUnresolvedLabe
     totalCpForaFvc: outside.length,
     cpForaFvc: outside.slice(0, 200),
     cpForaFvcTruncado: outside.length > 200,
+    neverAccessedCount: neverAccessed.length,
+    neverAccessed: neverAccessed.slice(0, 300),
+    neverAccessedTruncado: neverAccessed.length > 300,
     error: catalog.success ? '' : String(catalog.error || 'Erro ao ler carteira FVC.')
   };
 }
@@ -1427,6 +1442,8 @@ function loadAllJsonMonthlyData_() {
     const folderIds = [SHARD_FOLDER_ID, SHARD_FOLDER_ID_2025];
     let allData = [];
     let fileCount = 0;
+    // PENDING 3 FIX: filtrar apenas arquivos mensais — evita ler snapshots/cache (v59, v6.json)
+    const MONTHLY_PATTERN = /^sherlock_logs_\d{4}-\d{2}\.json$/i;
 
     folderIds.forEach(id => {
       try {
@@ -1439,8 +1456,12 @@ function loadAllJsonMonthlyData_() {
           const name = file.getName().toLowerCase();
           const mime = file.getMimeType();
 
-          // 1. Processa JSON
+          // 1. Processa JSON — SOMENTE mensais (exclui snapshots que causam duplicacao)
           if (name.endsWith('.json')) {
+            if (!MONTHLY_PATTERN.test(file.getName())) {
+              Logger.log('[SKIP] ' + name + ' (nao e mensal — ignorado)');
+              continue;
+            }
             try {
               const content = file.getBlob().getDataAsString();
               const json = JSON.parse(content);
@@ -1460,8 +1481,12 @@ function loadAllJsonMonthlyData_() {
               Logger.log('[SHEET OK] ' + name + ' (' + rows.length + ' linhas)');
             }
           }
-          // 3. Processa CSV (resumo_2025.csv)
+          // 3. Processa CSV — pula se ja ha dados suficientes (evita timeout com arquivos 90MB+)
           else if (name.endsWith('.csv') || mime === MimeType.CSV) {
+            if (allData.length > 5000) {
+              Logger.log('[SKIP CSV] ' + name + ' (dados suficientes de JSON/Sheets — ignorado)');
+              continue;
+            }
             const rows = readYearlySummaryCsv_(file);
             if (rows.length > 0) {
               allData = allData.concat(rows);

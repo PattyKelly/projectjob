@@ -1628,8 +1628,23 @@
                         </div>
                     </div>
                 </div>
-            </div>
 
+                <!-- PENDING 1 — CPs que nunca acessaram (precisam de motivação) -->
+                <div class="card" style="margin-top: 24px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+                        <div>
+                            <h3 style="margin:0 0 4px 0; font-size:1em;">🚨 CPs Sem Acesso — Precisam de Motivação</h3>
+                            <p style="margin:0; font-size:0.75em; color:var(--m);">Estão na carteira FVC ativa mas nunca apareceram nos logs de acesso no período filtrado.</p>
+                        </div>
+                        <div style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.35); border-radius:8px; padding:8px 18px; text-align:center; min-width:80px;">
+                            <div id="neverAccessedCount" style="font-size:1.6em; font-weight:700; color:#f87171;">—</div>
+                            <div style="font-size:0.65em; color:var(--m); text-transform:uppercase;">CPs</div>
+                        </div>
+                    </div>
+                    <div id="neverAccessedList" style="display:flex; flex-wrap:wrap; gap:8px; max-height:220px; overflow-y:auto; padding-right:4px;"></div>
+                    <div id="neverAccessedTruncMsg" style="display:none; margin-top:10px; font-size:0.72em; color:var(--m); font-style:italic;">Lista parcial — existem mais CPs sem acesso além dos exibidos.</div>
+                </div>
+            </div>
             
             <!-- TAB: TECH -->
             <div id="tabTech" class="tab-content" style="max-width: 1200px; margin: 0 auto;">
@@ -2469,6 +2484,7 @@
                 safeStep('loadFranchiseBigNumber2026', loadFranchiseBigNumber2026);
                 safeStep('ensureBigNumbersFromDirectRanges', ensureBigNumbersFromDirectRanges);
                 safeStep('renderPendingFranchiseEmailPanel', renderPendingFranchiseEmailPanel);
+                safeStep('renderNeverAccessed', renderNeverAccessed);
                 hideLoading();
             }).withFailureHandler(err => {
                 hideLoading();
@@ -2583,8 +2599,34 @@
             deltaEl.innerText = `${signal}${pct.toFixed(1).replace('.', ',')}%`;
         }
 
-        function renderPendingFranchiseEmailPanel() {
-            const countEl = document.getElementById('pendingDriveCount');
+        // PENDING 1 — Popula o bloco de CPs que nunca acessaram
+        function renderNeverAccessed() {
+            const countEl = document.getElementById('neverAccessedCount');
+            const listEl  = document.getElementById('neverAccessedList');
+            const truncEl = document.getElementById('neverAccessedTruncMsg');
+            if (!countEl || !listEl) return;
+
+            const fvcInfo = (stats && stats.fvcOutsideCurrentCycle) ? stats.fvcOutsideCurrentCycle : {};
+            const neverList = Array.isArray(fvcInfo.neverAccessed) ? fvcInfo.neverAccessed : [];
+            const count = Number(fvcInfo.neverAccessedCount) || neverList.length;
+
+            countEl.innerText = count.toLocaleString('pt-BR');
+
+            if (count === 0) {
+                listEl.innerHTML = '<span style="color:var(--m); font-size:0.8em;">Todos os CPs da carteira FVC já registraram ao menos um acesso. ✅</span>';
+                if (truncEl) truncEl.style.display = 'none';
+                return;
+            }
+
+            listEl.innerHTML = neverList.map(cp => {
+                const label = cp.nome ? `${cp.cod} — ${cp.nome}` : cp.cod;
+                return `<span class="email-gap-item" style="background:rgba(239,68,68,0.12); border-color:rgba(239,68,68,0.3); color:#fca5a5;">${label}</span>`;
+            }).join('');
+
+            if (truncEl) truncEl.style.display = fvcInfo.neverAccessedTruncado ? 'block' : 'none';
+        }
+
+        function renderPendingFranchiseEmailPanel() {            const countEl = document.getElementById('pendingDriveCount');
             const listEl = document.getElementById('pendingDriveList');
             if (!countEl || !listEl) return;
 

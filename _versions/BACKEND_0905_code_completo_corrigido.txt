@@ -42,6 +42,50 @@ function internal_logAccess_(user) {
     } catch(e) { console.error("Falha no Log Central:", e); }
 }
 
+// ═══════════════════════════════════════════════════════════
+// ADMIN / TECH ACCESS — Sherlock
+// Alterado Patty - 10/05/2026
+// Motivo: garantir que Tech & Diagnóstico só apareça e só execute para admins.
+// ═══════════════════════════════════════════════════════════
+
+const SHERLOCK_ADMIN_EMAILS = [
+  'patricia.wojciechowski@grupoboticario.com.br',
+  'opatriciakelly@gmail.com'
+];
+
+function getActiveUserEmailSafe_() {
+  try {
+    return String(Session.getActiveUser().getEmail() || '').toLowerCase().trim();
+  } catch (e) {
+    return '';
+  }
+}
+
+function isSherlockAdmin_() {
+  return SHERLOCK_ADMIN_EMAILS.includes(getActiveUserEmailSafe_());
+}
+
+function requireSherlockAdmin_() {
+  const email = getActiveUserEmailSafe_();
+  if (!SHERLOCK_ADMIN_EMAILS.includes(email)) {
+    throw new Error('Acesso negado. Área restrita Tech & Diagnóstico.');
+  }
+  return email;
+}
+
+/**
+ * Usado pelo front para decidir se exibe o menu Tech.
+ * Não joga erro para usuário comum; só retorna isAdmin=false.
+ */
+function getTechAccessContext() {
+  const email = getActiveUserEmailSafe_();
+  return {
+    success: true,
+    email: email,
+    isAdmin: SHERLOCK_ADMIN_EMAILS.includes(email)
+  };
+}
+
 // ==== AREA RESTRITA DE ADMIN / DEV ==== 
 function getAdminLogs() {
     const adminEmails = ['patricia.wojciechowski@grupoboticario.com.br', 'opatriciakelly@gmail.com'];
@@ -1220,9 +1264,9 @@ function getConsolidatedData(filterParams, forceRefresh = false) {
 // Alterado Patty - 10/05/2026
 // Teste rápido: valida se getHomeSnapshotFast está funcional e mede tempo de resposta.
 function admin_testHomeFast() {
+  requireSherlockAdmin_();
   const ini = Date.now();
   const res = getHomeSnapshotFast();
-
   return {
     success: !(res && res.error),
     elapsedMs: Date.now() - ini,
@@ -1230,22 +1274,17 @@ function admin_testHomeFast() {
     listLength: res && res.list ? res.list.length : 0,
     audit: res && res.stats ? res.stats.audit : null,
     cps: res && res.stats ? res.stats.cps : null,
+    audit2025: res && res.stats ? res.stats.audit2025 : null,
+    audit2026: res && res.stats ? res.stats.audit2026 : null,
+    semFvcCount: res && res.stats ? res.stats.semFvcCount : null,
     error: res && res.error ? res.error : ''
   };
 }
 
 function admin_forceRefreshSnapshot() {
-  const adminEmails = [
-    'patricia.wojciechowski@grupoboticario.com.br',
-    'opatriciakelly@gmail.com'
-  ];
-  const activeUser = Session.getActiveUser().getEmail().toLowerCase();
-  if (!adminEmails.includes(activeUser)) {
-    throw new Error('Ação permitida apenas para Administradores.');
-  }
-
+  requireSherlockAdmin_();
   const snapshot = getHomeSnapshotFast();
-  if (!snapshot || snapshot.error) {
+  if (!snapshot || snapshot.error || snapshot.success === false) {
     return {
       success: false,
       error: snapshot && snapshot.error
@@ -1259,6 +1298,20 @@ function admin_forceRefreshSnapshot() {
     loadedAt: new Date().toISOString(),
     stats: snapshot.stats || {},
     sourceMethod: snapshot.sourceMethod || 'SNAPSHOT_FAST_ONLY'
+  };
+}
+
+function admin_getTechPanelData() {
+  requireSherlockAdmin_();
+  const snapshotTest = admin_testHomeFast();
+  const logs = getAdminLogs();
+  return {
+    success: true,
+    loadedAt: new Date().toISOString(),
+    snapshotTest: snapshotTest,
+    logs: logs && logs.logs ? logs.logs.slice(0, 100) : [],
+    logsError: logs && logs.error ? logs.error : '',
+    sourceMethod: 'ADMIN_TECH_PANEL'
   };
 }
 

@@ -2662,8 +2662,20 @@
             if (topDispo) topDispo.innerText = toSafeNumber(stats && stats.dispo).toLocaleString('pt-BR');
             const topCps = document.getElementById('welcomeCpTotal');
             if (topCps) topCps.innerText = toSafeNumber(stats && stats.cps).toLocaleString('pt-BR');
+            // Alterado Patty - 10/05/2026
+            // Motivo: card "CPs SEM FVC" deve priorizar CPs fora da carteira FVC atual.
+            // Fallback: usa semFvcCount quando não houver fvcOutsideCurrentCycle.
             const topSemFvc = document.getElementById('welcomeSemFvc');
-            if (topSemFvc) topSemFvc.innerText = toSafeNumber(stats && stats.semFvcCount).toLocaleString('pt-BR');
+            if (topSemFvc) {
+                const foraFvc = toSafeNumber(
+                    stats &&
+                    stats.fvcOutsideCurrentCycle &&
+                    stats.fvcOutsideCurrentCycle.totalCpForaFvc
+                );
+                const semFvcCadastro = toSafeNumber(stats && stats.semFvcCount);
+                const valorCardSemFvc = foraFvc > 0 ? foraFvc : semFvcCadastro;
+                topSemFvc.innerText = valorCardSemFvc.toLocaleString('pt-BR');
+            }
             const topQuality = document.getElementById('welcomeQualityTotal');
             if (topQuality) {
                 const qv = toSafeNumber(stats && stats.qualityTotal);
@@ -2968,6 +2980,11 @@
 
         function renderTable(items) {
             items = Array.isArray(items) ? items : [];
+            // Alterado Patty - 10/05/2026: garantir exibição do mais recente para o mais antigo
+            items = items.slice().sort((a, b) => {
+                const toIso = d => { if (!d) return ''; const p = String(d).split('/'); return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : String(d); };
+                return toIso(b.d).localeCompare(toIso(a.d));
+            });
             const term = document.getElementById('cpSearch').value.trim();
             const showAudit = term.length > 0;
             const totalItems = items.length;

@@ -196,6 +196,58 @@ function admin_checkDateDuplicationRisk(targetDateIso) {
   }
 }
 
+/**
+ * Converte uma data de auditoria em chave ordenável.
+ * Alterado Patty - 10/05/2026
+ * Motivo: garantir Audit Log Explorer do mais atual para o mais antigo.
+ */
+function getAuditDateSortKey_(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  // Formato ISO vindo do Python: YYYY-MM-DD HH:mm:ss ou YYYY-MM-DDTHH:mm:ss
+  let m = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (m) {
+    return [
+      m[1], m[2], m[3],
+      String(m[4] || '00').padStart(2, '0'),
+      String(m[5] || '00').padStart(2, '0'),
+      String(m[6] || '00').padStart(2, '0')
+    ].join('');
+  }
+
+  // Formato BR: DD/MM/YYYY HH:mm:ss
+  m = raw.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (m) {
+    return [
+      m[3], m[2], m[1],
+      String(m[4] || '00').padStart(2, '0'),
+      String(m[5] || '00').padStart(2, '0'),
+      String(m[6] || '00').padStart(2, '0')
+    ].join('');
+  }
+
+  // Fallback usando parser já existente do Sherlock
+  const ctx = getNativeDateContext(raw);
+  if (!ctx || !ctx.k) return '';
+  return String(ctx.k).replace(/\D/g, '') + String(ctx.tm || '00:00').replace(/\D/g, '');
+}
+
+/**
+ * Ordena linhas brutas do JSON mensal pela DATA desc.
+ * 2026 primeiro, depois 2025.
+ */
+function sortJsonRowsByAuditDateDesc_(rows) {
+  return (Array.isArray(rows) ? rows.slice() : []).sort((a, b) => {
+    const ak = getAuditDateSortKey_(a && a['DATA']);
+    const bk = getAuditDateSortKey_(b && b['DATA']);
+    if (bk !== ak) return bk.localeCompare(ak);
+    const acp = String(a && a['COD DO CP'] || '');
+    const bcp = String(b && b['COD DO CP'] || '');
+    return acp.localeCompare(bcp);
+  });
+}
+
 function getNativeDateContext(dVal) {
     if (!dVal) return null;
     let d;
@@ -1531,8 +1583,13 @@ function buildResponseFromJson_(data, filterParams) {
     };
     const limitList = 3000;
 
-    for (let i = 0; i < data.length; i++) {
-      const row = data[i];
+    // Alterado Patty - 10/05/2026
+    // Motivo: Audit Log Explorer deve iniciar pelo registro mais recente.
+    // Importante: ordenar antes do limitList, senão o front pode receber 3.000 linhas antigas.
+    const orderedData = sortJsonRowsByAuditDateDesc_(data);
+
+    for (let i = 0; i < orderedData.length; i++) {
+      const row = orderedData[i];
       const tipoRaw = String(row['TIPO DO REPORT'] || 'Outro').trim();
       const tipo = tipoRaw === 'Outro' ? 'Acesso ao Drive' : tipoRaw;
       const cod  = String(row['COD DO CP'] || 'Unknown').trim();

@@ -1971,6 +1971,7 @@
                             <div class="an-period-btns">
                                 <button class="an-period-btn" onclick="setAnalyticsPeriod('week', this)">Semanal</button>
                                 <button class="an-period-btn active" onclick="setAnalyticsPeriod('month', this)">Mensal</button>
+                                <button class="an-period-btn" onclick="setAnalyticsPeriod('semester', this)">Semestre</button>
                                 <button class="an-period-btn" onclick="setAnalyticsPeriod('year', this)">Anual</button>
                             </div>
                         </div>
@@ -2492,7 +2493,13 @@
             const dl = document.getElementById('cpList');
             dl.innerHTML = "";
             const suggestions = Array.isArray(stats && stats.suggestions) ? stats.suggestions : [];
-            suggestions.forEach(s => dl.appendChild(new Option(s, s)));
+            const cpNames = (stats && stats.cpNames) ? stats.cpNames : {};
+            suggestions.forEach(s => {
+                // PENDING 5 FIX: exibe "código — NOME CP" para facilitar seleção
+                const nome = cpNames[s] || '';
+                const label = nome ? `${s} — ${nome}` : s;
+                dl.appendChild(new Option(label, s));
+            });
 
             // Event delegation na tabela — substitui onclick inline (evita quebra com aspas/acentos nos nomes)
             const tableBody = document.querySelector('#mainTable tbody');
@@ -3526,7 +3533,7 @@
         let anMainChartInstance   = null;
         let anDonutChartInstance  = null;
         let anForecastChartInstance = null;
-        let anCurrentPeriod = 'month';   // 'week' | 'month' | 'year'
+        let anCurrentPeriod = 'month';   // 'week' | 'month' | 'semester' | 'year'
         let anCurrentView   = 'resumo';  // 'resumo' | 'tipo' | 'franquia' | 'tendencia'
 
         function setAnalyticsView(view, btn) {
@@ -3551,6 +3558,10 @@
                 let bucketKey;
                 if (period === 'year') {
                     bucketKey = k.substring(0, 4);
+                } else if (period === 'semester') {
+                    const yr = k.substring(0, 4);
+                    const mo = parseInt(k.substring(5, 7), 10);
+                    bucketKey = yr + (mo <= 6 ? '-S1' : '-S2');
                 } else if (period === 'week') {
                     // ISO week: YYYY-Www
                     const d = new Date(k + 'T00:00:00');
@@ -3589,6 +3600,10 @@
                 let bucketKey;
                 if (period === 'year') {
                     bucketKey = iso.substring(0, 4);
+                } else if (period === 'semester') {
+                    const yr = iso.substring(0, 4);
+                    const mo = parseInt(iso.substring(5, 7), 10);
+                    bucketKey = yr + (mo <= 6 ? '-S1' : '-S2');
                 } else if (period === 'week') {
                     const dt = new Date(iso + 'T00:00:00');
                     const dayNr = (dt.getDay() + 6) % 7;
@@ -3723,6 +3738,7 @@
             const periodLabels = {
                 week: 'Views por Semana',
                 month: 'Views por Mês',
+                semester: 'Views por Semestre',
                 year: 'Views por Ano'
             };
             document.getElementById('anChartTitle').innerText = periodLabels[anCurrentPeriod] || 'Acessos';

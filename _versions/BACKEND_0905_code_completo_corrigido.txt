@@ -956,6 +956,7 @@ function internal_processSheetsData_(filterParams) {
         pendingFranchiseDrives: pendingFranchiseDrives,
         pendingFranchiseDriveCount: pendingFranchiseDriveCount,
         suggestions: Array.from(sugs).filter(s => s && s !== 'Unknown').slice(0, 100),
+        cpNames: stats.cpNames || {},
         lastUpdate: new Date().toISOString()
       },
       list: resultData
@@ -1651,6 +1652,7 @@ function buildResponseFromJson_(data, filterParams) {
         trend: trend,
         historyTotal: audit,
         suggestions: Array.from(sugs).filter(s => s && s !== 'Unknown').slice(0, 100),
+        cpNames: cpNames,
         lastUpdate: new Date().toISOString()
       },
       list: resultData

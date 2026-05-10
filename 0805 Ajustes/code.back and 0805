@@ -932,7 +932,11 @@ function internal_processSheetsData_(filterParams) {
         else if (dateKey && dateKey.startsWith('2026')) audit2026 += 2;
     });
 
-    const qualityTotal = totalCps > 0 ? Math.max(0, ((totalCps - semFvcCount) / totalCps) * 100) : 0;
+    // BLOCO 4 FIX: qualityTotal dinâmico — CPs com e-mail válido / total carteira FVC
+    const fvcCatalogSheets = getCurrentFvcCycleCatalog_();
+    const fvcCatalogTotalSheets = (fvcCatalogSheets && fvcCatalogSheets.success && fvcCatalogSheets.totalCp > 0) ? fvcCatalogSheets.totalCp : totalCps;
+    const cpsComEmailSheets = Math.max(0, totalCps - pendingFranchiseDriveCount);
+    const qualityTotal = fvcCatalogTotalSheets > 0 ? Math.min(100, (cpsComEmailSheets / fvcCatalogTotalSheets) * 100) : 0;
 
     const response = {
       success: true,
@@ -1623,12 +1627,15 @@ function buildResponseFromJson_(data, filterParams) {
       else if (dk.startsWith('2026')) audit2026 += trend[dk];
     }
 
-    const qualityTotal = totalCps > 0 ? Math.max(0, ((totalCps - semFvcCount) / totalCps) * 100) : 0;
+    // BLOCO 4 FIX: qualityTotal dinâmico — CPs com e-mail válido / total carteira FVC
+    const fvcCatalog = getCurrentFvcCycleCatalog_();
+    const fvcCatalogTotal = (fvcCatalog && fvcCatalog.success && fvcCatalog.totalCp > 0) ? fvcCatalog.totalCp : totalCps;
+    const cpsComEmail = Math.max(0, totalCps - pendingFranchiseDriveCount);
+    const qualityTotal = fvcCatalogTotal > 0 ? Math.min(100, (cpsComEmail / fvcCatalogTotal) * 100) : 0;
 
     return {
       success: true,
       canAudit: canAudit,
-      sourceMethod: 'JSON (Colab ETL)',
       // return {
       //  success: true,
       //  canAudit: canAudit,

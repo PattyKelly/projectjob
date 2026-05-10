@@ -2619,6 +2619,11 @@
             if (topCps) topCps.innerText = toSafeNumber(stats && stats.cps).toLocaleString('pt-BR');
             const topSemFvc = document.getElementById('welcomeSemFvc');
             if (topSemFvc) topSemFvc.innerText = toSafeNumber(stats && stats.semFvcCount).toLocaleString('pt-BR');
+            const topQuality = document.getElementById('welcomeQualityTotal');
+            if (topQuality) {
+                const qv = toSafeNumber(stats && stats.qualityTotal);
+                topQuality.innerText = qv > 0 ? qv.toFixed(2).replace('.', ',') + '%' : '—';
+            }
 
             // If Analytics tab is already visible, refresh it too
             const anTab = document.getElementById('tabAnalytics');

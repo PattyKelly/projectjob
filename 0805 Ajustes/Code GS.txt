@@ -281,7 +281,7 @@
         .welcome-stats {
             margin-top: 12px;
             display: grid;
-            grid-template-columns: repeat(5, minmax(140px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
             gap: 10px;
         }
         .welcome-stat {
@@ -1411,6 +1411,14 @@
                                 <div class="welcome-stat">
                                     <div class="k">Acessos/ View (Consolidado CI+CA)</div>
                                     <div id="welcomeAuditTotal" class="v">0</div>
+                                </div>
+                                <div class="welcome-stat">
+                                    <div class="k">Views 2025<br>(Histórico Validado)</div>
+                                    <div id="welcomeViews2025" class="v">0</div>
+                                </div>
+                                <div class="welcome-stat">
+                                    <div class="k">Views até o momento<br>(2026)</div>
+                                    <div id="welcomeViews2026" class="v">0</div>
                                 </div>
                                 <div class="welcome-stat">
                                     <div class="k">Disponibilizações</div>
@@ -2740,6 +2748,13 @@
             if (topDispo) topDispo.innerText = toSafeNumber(stats && stats.dispo).toLocaleString('pt-BR');
             const topCps = document.getElementById('welcomeCpTotal');
             if (topCps) topCps.innerText = toSafeNumber(stats && stats.cps).toLocaleString('pt-BR');
+
+            // Alterado Patty - 10/05/2026: cards de views por ano
+            const views2025 = Number(stats && (stats.viewsOfficial2025 || stats.audit2025 || stats.viewsRaw2025) || 0);
+            const views2026 = Number(stats && (stats.viewsAudited2026 || stats.viewsOfficial2026 || stats.audit2026 || stats.viewsRaw2026) || 0);
+            setTextSafe('welcomeViews2025', views2025.toLocaleString('pt-BR'));
+            setTextSafe('welcomeViews2026', views2026.toLocaleString('pt-BR'));
+
             // Alterado Patty - 10/05/2026
             // Motivo: card "CPs SEM FVC" deve priorizar CPs fora da carteira FVC atual.
             // Fallback: usa semFvcCount quando não houver fvcOutsideCurrentCycle.

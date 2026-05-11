@@ -1356,7 +1356,7 @@
             position: relative;
             min-width: 220px;
             flex: 0 0 220px;
-            z-index: 50;
+            z-index: 20;
         }
 
         .period-picker-btn {
@@ -1393,14 +1393,14 @@
             top: calc(100% + 8px);
             left: 0;
             width: 100%;
-            max-height: 320px;
+            max-height: 260px;
             overflow-y: auto;
             border-radius: 16px;
             border: 1px solid rgba(255,255,255,0.14);
             background: #0f172a;
             color: #ffffff;
             box-shadow: 0 22px 60px rgba(0,0,0,0.65);
-            z-index: 99999;
+            z-index: 30;
             padding: 8px;
         }
 
@@ -2472,10 +2472,26 @@
                 document.addEventListener('click', function(e) {
                     const picker = document.getElementById('periodPicker');
                     if (picker && !picker.contains(e.target)) {
-                        picker.classList.remove('open');
+                        closePeriodPicker_();
                     }
                 });
             }
+
+            if (!document._periodPickerScrollBound) {
+                document._periodPickerScrollBound = true;
+                // Alterado Patty - 11/05/2026
+                // Motivo: ao rolar a tela, o seletor não deve continuar flutuando sobre o Explorer.
+                document.addEventListener('scroll', function() {
+                    closePeriodPicker_();
+                }, true);
+            }
+        }
+
+        // Alterado Patty - 11/05/2026
+        // Motivo: impedir que o dropdown de mês fique sobreposto ao Audit Log Explorer.
+        function closePeriodPicker_() {
+            const picker = document.getElementById('periodPicker');
+            if (picker) picker.classList.remove('open');
         }
 
         function appendPeriodPickerOption_(opt) {
@@ -3556,6 +3572,10 @@
         function loadAuditExplorerPage(page) {
             auditExplorerPage = page || 1;
 
+            // Alterado Patty - 11/05/2026
+            // Motivo: ao localizar/carregar período, o dropdown customizado deve fechar.
+            closePeriodPicker_();
+
             const period = document.getElementById('periodFilter').value || '';
             const type   = document.getElementById('typeFilter').value  || '';
 
@@ -3575,7 +3595,9 @@
 
             const tbody = document.querySelector('#mainTable tbody');
             if (tbody) {
-                tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:30px;color:var(--p)">⏳ Carregando ${period} — página ${auditExplorerPage}...</td></tr>`;
+                // Alterado Patty - 11/05/2026
+                // Motivo: tabela do Explorer possui 5 colunas com REGISTRO AUDITADO.
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--p)">⏳ Carregando ${period} — página ${auditExplorerPage}...</td></tr>`;
             }
 
             google.script.run
@@ -3632,6 +3654,10 @@
         // Motivo: runFilters não pode chamar getConsolidatedData diretamente.
         // Todo o Explorer agora passa por api_getAuditExplorerPage (leitura por mês sob demanda).
         function runFilters() {
+            // Alterado Patty - 11/05/2026
+            // Motivo: evitar sobreposição do seletor de mês sobre o Audit Log Explorer.
+            closePeriodPicker_();
+
             loadAuditExplorerPage(1);
         }
 

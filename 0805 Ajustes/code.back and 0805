@@ -1558,7 +1558,9 @@ function SH_readResumoFull_(ssId, sheetName, canAudit, payload) {
           c: codCp,
           n: nomeCp,
           e: canAudit ? SH_maskEmailForAudit_(emailRaw) : '',
-          q: qtd
+          i: '',      // arquivo_log não existe nos resumos — campo mantido para compatibilidade
+          v: qtd,     // 'v' = quantidade, padrão compact do sistema (não usar 'q')
+          q: qtd      // alias mantido para retrocompatibilidade
         });
       }
     }

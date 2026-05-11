@@ -2454,18 +2454,21 @@ function api_getAuditExplorerPage(params) {
       const dateKey = SH_brDateToIso_(dataBREx);
       const fDate   = dataBREx;
 
+      // Alterado Patty - 11/05/2026
+      // Motivo: regra única de qualidade para o Audit Log Explorer.
+      // Remove CP vazio, Unknown, Evento Nao Registrado/Perdido e datas futuras.
+      const codNorm = normalizeCpCode_(cod);
+      const maxAllowedDate = SH_getResumoMaxDate_();
+
+      if (dateKey && maxAllowedDate && dateKey > maxAllowedDate) continue;
+      if (!codNorm) continue;
+      if (String(cod || '').trim().toLowerCase() === 'unknown') continue;
+      if (SH_isResumoNoiseCp_(cod, nomeRaw) || SH_isResumoNoiseCp_(cod, nome)) continue;
+
       if (type && tipo !== type) continue;
-      // Alterado Patty - 10/05/2026: ocultar registros de ruído sem CP real no Explorer
-      const nomeNorm = nome.toLowerCase();
-      if (!cod || cod === 'Unknown') continue;
-      if (nomeNorm.includes('evento não registrado') ||
-          nomeNorm.includes('evento nao registrado') ||
-          nomeNorm.includes('sem registro log') ||
-          nomeNorm.includes('capturado mas sem') ||
-          nomeNorm.includes('perdido')) continue;
       if (term && !matchesCpSearchByCodeFirst_(term, cod, nome, ator)) continue;
 
-      parsed.push({ t: tipo, c: cod, n: nome, d: fDate, dateKey: dateKey,
+      parsed.push({ t: tipo, c: codNorm, n: nome, d: fDate, dateKey: dateKey,
                     e: canAudit ? auditEmailForUiOnly_(ator) : null,
                     i: String(row['ARQUIVO_LOG'] || ''), v: Number(row['QUANTIDADE DE ACESSOS'] || 1) });
     }
@@ -3121,23 +3124,21 @@ function getCpEvidenceData(cpInput, dateFrom, dateTo) {
       const dataBR = SH_getAccessDateBR_(row);
       if (!dataBR) continue;
       const dateKey = SH_brDateToIso_(dataBR);
-
-
-        // Alterado Patty - 11/05/2026
-        // Motivo: regra única de qualidade para o Audit Log Explorer.
-        // Remove CP vazio, Unknown, Evento Nao Registrado/Perdido e datas futuras.
-        const codNorm = normalizeCpCode_(cod);
-        const maxAllowedDate = SH_getResumoMaxDate_();
-
-        if (dateKey && maxAllowedDate && dateKey > maxAllowedDate) continue;
-        if (!codNorm) continue;
-        if (String(cod || '').trim().toLowerCase() === 'unknown') continue;
-        if (SH_isResumoNoiseCp_(cod, nomeRaw) || SH_isResumoNoiseCp_(cod, nome)) continue;
       if (dateKey && todayKey && dateKey > todayKey) continue;
+      const maxAllowedDate = SH_getResumoMaxDate_();
+      if (dateKey && maxAllowedDate && dateKey > maxAllowedDate) continue;
       if (dateKey && from && dateKey < from) continue;
+      if (dateKey && to && dateKey > to) continue;
+
+      const cod = String(SH_getValueByAliases_(row, ['COD DO CP','COD CP','COD','CODIGO','CÓDIGO']) || '').trim();
+      const nomeRawEv = String(SH_getValueByAliases_(row, ['NOME DO CP','NOME CP','NOME','NAME']) || '').trim();
+      const nome = SH_normalizeCpName_(nomeRawEv);
+      if (!cod && !nome) continue;
+      if (cod === 'Unknown' || SH_isResumoNoiseCp_(cod, nomeRawEv)) continue;
+
       const codNorm = normalizeCpCode_(cod);
       const nameNorm = normalizeEvidenceSearchText_(nome);
-        parsed.push({ t: tipo, c: codNorm, n: nome, d: fDate, dateKey: dateKey,
+      const rowText = normalizeEvidenceSearchText_(cod + ' ' + nome);
       let matches = false;
 
       if (queryCode && codNorm && codNorm === queryCode) {

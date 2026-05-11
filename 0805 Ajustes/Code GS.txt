@@ -2697,10 +2697,33 @@
 
         function normCpName(name) {
             if (!name) return name;
-            let n = String(name).replace(/\s+N[°º]?\d+\s*$/i, '').trim().replace(/\s+/g, ' ');
-            n = n.replace(/^CP\s+M\s+D\s+/i, 'CP MD ');
+
+            let n = String(name)
+                .replace(/\s+N[°º]?\d+\s*$/i, '')
+                .trim()
+                .replace(/\s+/g, ' ');
+
+            if (!n) return n;
+
+            // Padronização de nomes conhecidos
             n = n.replace(/^CP\s+MS\s+PERFUMARIA$/i, 'CP M S PERFUMARIA');
             n = n.replace(/^CP\s+M\.?\s*S\.?\s+PERFUMARIA$/i, 'CP M S PERFUMARIA');
+
+            // Regra visual padrão:
+            // Se é um nome de CP válido e não começa com "CP", adiciona "CP ".
+            const lower = n.toLowerCase();
+
+            const isNoise =
+                lower.includes('evento não registrado') ||
+                lower.includes('evento nao registrado') ||
+                lower.includes('sem log') ||
+                lower.includes('unknown') ||
+                lower.includes('desconhecido');
+
+            if (!isNoise && !/^CP\b/i.test(n)) {
+                n = 'CP ' + n;
+            }
+
             return n;
         }
 
@@ -3077,23 +3100,44 @@
         // Alterado Patty - 10/05/2026
         // Audit Log Explorer sob demanda — lê apenas o mês selecionado no periodFilter
         let auditExplorerPage = 1;
-        const auditExplorerPageSize = 100;
+
+        // Alterado Patty - 10/05/2026
+        // Motivo: a tabela deve paginar no servidor com 50 linhas por página.
+        // Antes o front recebia só um lote e criava apenas 6 páginas.
+        const auditExplorerPageSize = 50;
+
+        let tablePaginationMode = 'local';
+        let auditExplorerMeta = {
+            total: 0,
+            totalPages: 1,
+            page: 1,
+            period: ''
+        };
 
         function loadAuditExplorerPage(page) {
             auditExplorerPage = page || 1;
+
             const period = document.getElementById('periodFilter').value || '';
             const type   = document.getElementById('typeFilter').value  || '';
-            // Alterado Patty - 10/05/2026: envia sempre COD CP ao back
+
+            // Alterado Patty - 10/05/2026
+            // Motivo: se o usuário selecionar "10708 — CP VM", enviar ao back somente "10708".
             const termRaw = document.getElementById('cpSearch').value || '';
-            const term = normalizeCpSearchTermFront_(termRaw);
+            const term = typeof normalizeCpSearchTermFront_ === 'function'
+                ? normalizeCpSearchTermFront_(termRaw)
+                : String(termRaw || '').trim();
 
             if (!period) {
                 showToast('Selecione um mês para consultar o histórico.', '📅');
                 return;
             }
 
+            tablePaginationMode = 'server';
+
             const tbody = document.querySelector('#mainTable tbody');
-            if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:30px;color:var(--p)">⏳ Carregando ${period}...</td></tr>`;
+            if (tbody) {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:30px;color:var(--p)">⏳ Carregando ${period} — página ${auditExplorerPage}...</td></tr>`;
+            }
 
             google.script.run
                 .withSuccessHandler(res => {
@@ -3101,16 +3145,36 @@
                         showToast(res && res.error ? res.error : 'Erro ao buscar histórico.', '⚠️');
                         return;
                     }
+
                     fullList = res.list || [];
-                    currentTablePage = 1;
+
+                    currentTablePage = Number(res.page || auditExplorerPage || 1);
+
+                    auditExplorerMeta = {
+                        total: Number(res.total || 0),
+                        totalPages: Math.max(1, Number(res.totalPages || 1)),
+                        page: currentTablePage,
+                        period: res.period || period
+                    };
+
                     renderTable(fullList);
+
                     const info = document.getElementById('tablePaginationInfo');
-                    if (info) info.innerText = `Período ${res.period} · ${res.total.toLocaleString('pt-BR')} registros · Página ${res.page} de ${res.totalPages}`;
+                    if (info) {
+                        info.innerText =
+                            `Período ${res.period} · ${Number(res.total || 0).toLocaleString('pt-BR')} registros · Página ${res.page} de ${res.totalPages}`;
+                    }
                 })
                 .withFailureHandler(err => {
                     showToast('Falha ao carregar histórico: ' + err.message, '📡');
                 })
-                .api_getAuditExplorerPage({ period, type, term, page: auditExplorerPage, pageSize: auditExplorerPageSize });
+                .api_getAuditExplorerPage({
+                    period,
+                    type,
+                    term,
+                    page: auditExplorerPage,
+                    pageSize: auditExplorerPageSize
+                });
         }
 
         function runFiltersDebounced() {
@@ -3136,11 +3200,25 @@
             });
             const term = document.getElementById('cpSearch').value.trim();
             const showAudit = term.length > 0;
-            const totalItems = items.length;
-            const totalPages = Math.max(1, Math.ceil(totalItems / TABLE_PAGE_SIZE));
+            const isServerMode = tablePaginationMode === 'server';
+
+            const totalItems = isServerMode
+                ? Number(auditExplorerMeta.total || 0)
+                : items.length;
+
+            const totalPages = isServerMode
+                ? Math.max(1, Number(auditExplorerMeta.totalPages || 1))
+                : Math.max(1, Math.ceil(totalItems / TABLE_PAGE_SIZE));
+
             currentTablePage = Math.min(Math.max(currentTablePage, 1), totalPages);
-            const startIndex = (currentTablePage - 1) * TABLE_PAGE_SIZE;
-            const pagedItems = items.slice(startIndex, startIndex + TABLE_PAGE_SIZE);
+
+            const startIndex = isServerMode
+                ? (currentTablePage - 1) * auditExplorerPageSize
+                : (currentTablePage - 1) * TABLE_PAGE_SIZE;
+
+            const pagedItems = isServerMode
+                ? items
+                : items.slice(startIndex, startIndex + TABLE_PAGE_SIZE);
             const tableWrap = document.querySelector('.audit-table-wrap');
 
             if (tableWrap) {
@@ -3220,9 +3298,21 @@
         });
 
         function setTablePage(page) {
+            if (tablePaginationMode === 'server') {
+                const totalPages = Math.max(1, Number(auditExplorerMeta.totalPages || 1));
+                const nextPage = Math.min(Math.max(page, 1), totalPages);
+
+                if (nextPage === currentTablePage) return;
+
+                loadAuditExplorerPage(nextPage);
+                return;
+            }
+
             const totalPages = Math.max(1, Math.ceil(fullList.length / TABLE_PAGE_SIZE));
             const nextPage = Math.min(Math.max(page, 1), totalPages);
+
             if (nextPage === currentTablePage) return;
+
             currentTablePage = nextPage;
             renderTable(fullList);
         }

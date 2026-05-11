@@ -1928,6 +1928,30 @@ function readSherlockMonthlyJson_(period) {
   return [];
 }
 
+// Alterado Patty - 10/05/2026
+// Garante que nomes de CP sem prefixo "CP" recebam o prefixo na exibição.
+function normalizeCpNameForDisplay_(value) {
+  var n = String(value || '').trim().replace(/\s+/g, ' ');
+  if (!n) return '';
+
+  n = n.replace(/^CP\s+MS\s+PERFUMARIA$/i, 'CP M S PERFUMARIA');
+  n = n.replace(/^CP\s+M\.?\s*S\.?\s+PERFUMARIA$/i, 'CP M S PERFUMARIA');
+
+  var lower = n.toLowerCase();
+  var isNoise =
+    lower.indexOf('evento n\u00e3o registrado') > -1 ||
+    lower.indexOf('evento nao registrado') > -1 ||
+    lower.indexOf('sem log') > -1 ||
+    lower.indexOf('unknown') > -1 ||
+    lower.indexOf('desconhecido') > -1;
+
+  if (!isNoise && !/^CP\b/i.test(n)) {
+    n = 'CP ' + n;
+  }
+
+  return n;
+}
+
 /**
  * API paginada para o Audit Log Explorer.
  * Carrega somente o mês selecionado — sem reprocessar tudo.
@@ -1938,7 +1962,7 @@ function api_getAuditExplorerPage(params) {
     const p = params || {};
     const period   = String(p.period   || '').trim();
     const page     = Math.max(1, Number(p.page     || 1));
-    const pageSize = Math.min(Math.max(10, Number(p.pageSize || 100)), 300);
+    const pageSize = Math.min(Math.max(10, Number(p.pageSize || 50)), 100);
     const term     = String(p.term || '').toLowerCase().trim();
     const type     = String(p.type || '').trim();
 
@@ -1956,7 +1980,8 @@ function api_getAuditExplorerPage(params) {
       const tipoRaw = String(row['TIPO DO REPORT'] || 'Outro').trim();
       const tipo    = tipoRaw === 'Outro' ? 'Acesso ao Drive' : tipoRaw;
       const cod     = String(row['COD DO CP']  || 'Unknown').trim();
-      const nome    = String(row['NOME DO CP'] || '').trim();
+      const nomeRaw = String(row['NOME DO CP'] || '').trim();
+      const nome    = normalizeCpNameForDisplay_(nomeRaw);
       const ator    = String(getAuditActorRawFromRow_(row) || '').trim();
       const dCtx    = getNativeDateContext(row['DATA'] || '');
       const dateKey = dCtx ? dCtx.k : '';
@@ -1986,10 +2011,11 @@ function api_getAuditExplorerPage(params) {
 
     const total = parsed.length;
     const start = (page - 1) * pageSize;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
     return {
       success: true, period: period, page: page, pageSize: pageSize,
-      total: total, totalPages: Math.ceil(total / pageSize),
+      total: total, totalPages: totalPages,
       list: sanitizeAuditListEmailOnly_(parsed.slice(start, start + pageSize))
     };
   } catch(e) {

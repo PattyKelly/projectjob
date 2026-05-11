@@ -1569,6 +1569,15 @@ function SH_readResumoFull_(ssId, sheetName, canAudit, payload) {
       var isAdmin  = SH_isResumoAdminEmail_(emailRaw);
       var nomeCpRaw = idx.nomeCp >= 0 ? String(row[idx.nomeCp] || '').trim() : '';
       var nomeCp    = SH_normalizeCpName_(nomeCpRaw);
+
+      // Regra resgatada: ignorar linhas de evento não registrado ou perdido
+      // Mesma lógica dos agregadores JSON (linhas ~2403). Alterado Patty - 11/05/2026
+      var nomeNormEvt = nomeCp.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (nomeNormEvt.includes('evento nao registrado') ||
+          nomeNormEvt.includes('evento perdido') ||
+          nomeNormEvt.includes('perdido') ||
+          codCp === 'Unknown' || codCp === 'unknown') continue;
+
       var tipoRaw   = idx.tipo >= 0 ? String(row[idx.tipo] || '').trim() : '';
       var tipo      = SH_normalizeTipoReport_(tipoRaw);
       var qtdRaw    = idx.quantidade >= 0 ? Number(row[idx.quantidade]) : 1;

@@ -1099,7 +1099,7 @@ const CACHE_FILE_NAME = 'sherlock_v59_snapshot.json';
 
 const SHERLOCK_OFFICIAL_2025_VIEWS = 56000;
 const SHERLOCK_OFFICIAL_CP_REPORTS = 378;
-const SHERLOCK_OFFICIAL_SEM_FVC    = 40;
+const SHERLOCK_OFFICIAL_SEM_FVC    = 40; // CPs não ativos (fora da carteira FVC ativa)
 
 function sumTrendSplitParityByYear_(trendSplit, year) {
   let ca = 0, ci = 0, outros = 0;
@@ -1148,7 +1148,7 @@ function applySherlockOfficialMetrics_(data) {
   stats.cps    = Math.max(stats.cpsRaw, SHERLOCK_OFFICIAL_CP_REPORTS);
 
   stats.semFvcCount  = SHERLOCK_OFFICIAL_SEM_FVC;
-  stats.semFvcSource = 'FIXO_MANUAL_VALIDADO_APPS_SCRIPT';
+  stats.semFvcSource = 'FIXO_MANUAL_VALIDADO_CPS_NAO_ATIVOS';
 
   // Evita leitura FVC/carteira na home.
   stats.fvcOutsideCurrentCycle = stats.fvcOutsideCurrentCycle || {

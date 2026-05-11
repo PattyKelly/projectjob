@@ -1413,8 +1413,12 @@
                                     <div id="welcomeViews2025" class="v">0</div>
                                 </div>
                                 <div class="welcome-stat">
-                                    <div class="k">Views 2026<br>(até o momento)</div>
+                                    <div class="k">Views Registradas<br>até o Momento</div>
                                     <div id="welcomeViews2026" class="v">0</div>
+                                </div>
+                                <div class="welcome-stat">
+                                    <div class="k">Views após ajuste<br>campo e-mail (maio+)</div>
+                                    <div id="welcomeViewsEmailAdjusted" class="v">0</div>
                                 </div>
                                 <div class="welcome-stat">
                                     <div class="k">Views Oficiais (Consolidado CI+CA)</div>
@@ -2270,7 +2274,7 @@
         // GERAR ONEPAGE DIRETO DA NUVEM
         function generateDirectOnePage() {
             const cpRaw = document.getElementById('opSearch').value;
-            const cp = String(cpRaw || '').trim();
+            const cp = normalizeCpSearchTermFront_(cpRaw);
             const dFrom = document.getElementById('opDateFrom').value;
             const dTo = document.getElementById('opDateTo').value;
             const btn = document.getElementById('opGenerateBtn');
@@ -2624,15 +2628,26 @@
 
         function initUI() {
             const dl = document.getElementById('cpList');
-            dl.innerHTML = "";
+            dl.innerHTML = '';
             const suggestions = Array.isArray(stats && stats.suggestions) ? stats.suggestions : [];
             const cpNames = (stats && stats.cpNames) ? stats.cpNames : {};
-            suggestions.forEach(s => {
-                // PENDING 5 FIX: exibe "código — NOME CP" para facilitar seleção
-                const nome = cpNames[s] || '';
-                const label = nome ? `${s} — ${nome}` : s;
-                dl.appendChild(new Option(label, s));
-            });
+            const seen = {};
+
+            suggestions
+                .map(function(s) { return normalizeCodCpFront_(s); })
+                .filter(Boolean)
+                .sort(function(a, b) { return a.localeCompare(b, 'pt-BR', { numeric: true }); })
+                .forEach(function(codCp) {
+                    if (seen[codCp]) return;
+                    seen[codCp] = true;
+                    const nome = normalizarNomeCpFront_(cpNames[codCp] || '');
+                    const label = nome ? (codCp + ' — ' + nome) : codCp;
+                    const opt = document.createElement('option');
+                    opt.value = codCp;
+                    opt.label = label;
+                    opt.textContent = label;
+                    dl.appendChild(opt);
+                });
 
             // Event delegation na tabela — substitui onclick inline (evita quebra com aspas/acentos nos nomes)
             const tableBody = document.querySelector('#mainTable tbody');
@@ -2654,11 +2669,37 @@
         }
 
         // Remove sufixo de numero do nome do CP (ex: "Nº378", "N°12") — apenas para exibicao
+        // ═══════════════════════════════════════════════════════
+        // BUSCA POR COD CP — FRONT
+        // Alterado Patty - 10/05/2026
+        // Motivo: enviar ao back sempre o COD CP quando existir.
+        // Exemplo: "10817 — CP TAMAI..." deve virar "10817".
+        // ═══════════════════════════════════════════════════════
+        function normalizeCodCpFront_(value) {
+            const raw = String(value || '').trim();
+            const match = raw.match(/\d{3,}/);
+            if (!match) return '';
+            return String(match[0]).replace(/^0+(?=\d)/, '');
+        }
+        function normalizeCpSearchTermFront_(value) {
+            const raw = String(value || '').trim();
+            const cod = normalizeCodCpFront_(raw);
+            return cod ? cod : raw;
+        }
+        function normalizarNomeCpFront_(name) {
+            if (!name) return '';
+            let n = String(name).trim().replace(/\s+/g, ' ').toUpperCase();
+            n = n.replace(/^CP\s+MS\s+PERFUMARIA$/i, 'CP M S PERFUMARIA');
+            n = n.replace(/^CP\s+M\.?\s*S\.?\s+PERFUMARIA$/i, 'CP M S PERFUMARIA');
+            return n;
+        }
+
         function normCpName(name) {
             if (!name) return name;
-            let n = String(name).replace(/\s+N[°º]?\d+\s*$/i, '').trim();
-            // Consolidar iniciais com espaço (ex: M D COMERCIO -> MD COMERCIO)
+            let n = String(name).replace(/\s+N[°º]?\d+\s*$/i, '').trim().replace(/\s+/g, ' ');
             n = n.replace(/^CP\s+M\s+D\s+/i, 'CP MD ');
+            n = n.replace(/^CP\s+MS\s+PERFUMARIA$/i, 'CP M S PERFUMARIA');
+            n = n.replace(/^CP\s+M\.?\s*S\.?\s+PERFUMARIA$/i, 'CP M S PERFUMARIA');
             return n;
         }
 
@@ -2773,12 +2814,22 @@
             const topCps = document.getElementById('welcomeCpTotal');
             if (topCps) topCps.innerText = toSafeNumber(stats && stats.cps).toLocaleString('pt-BR');
 
-            // Alterado Patty - 10/05/2026: cards de views por ano
-            // views2026 usa dado auditado (carga ate 30/04/2026); viewsPotential so como fallback
-            const views2025 = Number(stats && (stats.viewsOfficial2025 || stats.audit2025 || stats.viewsRaw2025) || 0);
-            const views2026 = Number(stats && (stats.viewsAudited2026 || stats.audit2026 || stats.viewsRaw2026 || stats.viewsPotential2026) || 0);
+            // Alterado Patty - 10/05/2026: cards de views
+            // 1) Views 2025 (Histórico) | 2) Views Registradas até o Momento | 3) Views após ajuste campo e-mail
+            function fmtKViews(v) {
+                return v >= 1000
+                    ? Math.round(v / 1000).toLocaleString('pt-BR') + 'K Views'
+                    : v.toLocaleString('pt-BR') + ' Views';
+            }
+            const views2025 = Number(stats && (stats.viewsOfficial2025 || stats.audit2025 || stats.viewsRaw2025) || 0) || 56000;
+            const views2026 = Number(stats && (stats.viewsAudited2026 || stats.audit2026 || stats.viewsRaw2026) || 0);
+            const viewsEmailAdj = Number(stats && (
+                stats.viewsAfterEmailAdjustmentFromMay ||
+                (stats.viewsPotential2026Details && stats.viewsPotential2026Details.totalFromMay)
+            ) || 0);
             setTextSafe('welcomeViews2025', views2025.toLocaleString('pt-BR'));
-            setTextSafe('welcomeViews2026', views2026.toLocaleString('pt-BR'));
+            setTextSafe('welcomeViews2026', fmtKViews(views2026));
+            setTextSafe('welcomeViewsEmailAdjusted', fmtKViews(viewsEmailAdj));
 
             // Alterado Patty - 10/05/2026
             // Motivo: card "CPs SEM FVC" deve priorizar CPs fora da carteira FVC atual.
@@ -3031,7 +3082,9 @@
             auditExplorerPage = page || 1;
             const period = document.getElementById('periodFilter').value || '';
             const type   = document.getElementById('typeFilter').value  || '';
-            const term   = document.getElementById('cpSearch').value    || '';
+            // Alterado Patty - 10/05/2026: envia sempre COD CP ao back
+            const termRaw = document.getElementById('cpSearch').value || '';
+            const term = normalizeCpSearchTermFront_(termRaw);
 
             if (!period) {
                 showToast('Selecione um mês para consultar o histórico.', '📅');

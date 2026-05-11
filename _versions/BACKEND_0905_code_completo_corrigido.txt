@@ -427,6 +427,49 @@ function normalizeCpCode_(value) {
   return onlyDigits.replace(/^0+(?=\d)/, '');
 }
 
+// ═══════════════════════════════════════════════════════
+// BUSCA POR COD CP — BACKEND
+// Alterado Patty - 10/05/2026
+// Motivo: priorizar COD CP; nome/ator só como fallback.
+// Exemplo: "10817 — CP TAMAI..." busca somente COD = 10817.
+// ═══════════════════════════════════════════════════════
+
+function normalizeSearchTextSherlock_(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractCpCodeFromSearch_(value) {
+  const raw = String(value || '').trim();
+  const match = raw.match(/\d{3,}/);
+  if (!match) return '';
+  return normalizeCpCode_(match[0]);
+}
+
+function matchesCpSearchByCodeFirst_(term, cod, nome, ator) {
+  const rawTerm = String(term || '').trim();
+  if (!rawTerm) return true;
+
+  const queryCode = extractCpCodeFromSearch_(rawTerm);
+  const rowCode   = normalizeCpCode_(cod);
+
+  // Prioridade: se veio código, compara somente COD CP.
+  if (queryCode) {
+    return rowCode === queryCode;
+  }
+
+  // Fallback textual por nome/ator apenas quando não veio código.
+  const hay = normalizeSearchTextSherlock_([cod, nome, ator].join(' '));
+  const words = normalizeSearchTextSherlock_(rawTerm).split(/\s+/).filter(Boolean);
+  if (words.length === 0) return true;
+  return words.every(function(w) { return hay.indexOf(w) > -1; });
+}
+
 function getCurrentFvcCycleCatalog_() {
   try {
     const ss = SpreadsheetApp.openById(FVC_CARTEIRA_SPREADSHEET_ID);
@@ -916,11 +959,7 @@ function internal_processSheetsData_(filterParams) {
                if (type !== filterParams.type) matchType = false;
            }
            if (filterParams.term && filterParams.term !== "") {
-               // Busca word-by-word: aceita qualquer fragmento do nome
-               // ex: 'MARGARETH SPOHR' funciona mesmo que a ordem das palavras varie
-               const words = filterParams.term.toLowerCase().trim().split(/\s+/);
-               const haystack = (cod + ' ' + nom).toLowerCase();
-               if (!words.every(w => haystack.includes(w))) matchTerm = false;
+               if (!matchesCpSearchByCodeFirst_(filterParams.term, cod, nom, ator)) matchTerm = false;
            }
             // Filtro de periodo: sem restriÃ§Ã£o (comeÃ§a do primeiro dia disponÃ­vel)
             if (dateKey !== '') {
@@ -1115,7 +1154,10 @@ function internal_processSheetsData_(filterParams) {
         fvcOutsideCurrentCycle: fvcOutsideCurrentCycle,
         pendingFranchiseDrives: pendingFranchiseDrives,
         pendingFranchiseDriveCount: pendingFranchiseDriveCount,
-        suggestions: Array.from(sugs).filter(s => s && s !== 'Unknown').slice(0, 100),
+        suggestions: Array.from(sugs)
+          .map(function(s) { return normalizeCpCode_(s); })
+          .filter(function(s) { return s && s !== 'Unknown'; })
+          .sort(function(a, b) { return a.localeCompare(b, 'pt-BR', { numeric: true }); }),
         cpNames: stats.cpNames || {},
         lastUpdate: new Date().toISOString()
       },
@@ -1228,6 +1270,30 @@ function applySherlockOfficialMetrics_(data) {
   const audited2026    = unique2026 > 0 ? unique2026 : raw2026;
   const potential2026  = calculateSherlockPotentialViews2026_('2026-01-01', null);
 
+  // Alterado Patty - 10/05/2026
+  // Métrica: Views após ajuste do campo e-mail (maio em diante, 4 e-mails/CP)
+  const todayIsoForEmailAdjustment = sherlockToIsoDateLocal_(new Date());
+  const daysFromMayForEmailAdjustment = sherlockIntersectionDays_(
+    '2026-05-01', todayIsoForEmailAdjustment, '2026-05-01', '2026-12-31'
+  );
+  const distinctCpCodes = {};
+  if (Array.isArray(stats.cpUniverseCodes)) {
+    stats.cpUniverseCodes.forEach(function(codRaw) {
+      const cod = normalizeCpCode_(codRaw);
+      if (cod) distinctCpCodes[cod] = true;
+    });
+  }
+  const cpBaseDistinct = Object.keys(distinctCpCodes).length;
+  const cpBaseAfterEmailAdjustment = cpBaseDistinct > 0
+    ? cpBaseDistinct
+    : Math.max(0, SHERLOCK_CP_CESTO_OFICIAL - SHERLOCK_OFFICIAL_SEM_FVC);
+  const viewsAfterEmailAdjustmentFromMay =
+    cpBaseAfterEmailAdjustment *
+    SHERLOCK_EMAILS_POR_CP_APOS_202605 *
+    SHERLOCK_REPORTS_POR_CP *
+    SHERLOCK_ABERTURAS_POR_REPORT_DIA *
+    daysFromMayForEmailAdjustment;
+
   // Rastreabilidade
   stats.auditRaw           = rawAudit;
   stats.audit2025Raw       = raw2025;
@@ -1241,6 +1307,17 @@ function applySherlockOfficialMetrics_(data) {
   stats.viewsPotential2026Details = potential2026;
   stats.viewsPerCpDayFromMay2026  = potential2026.viewsPerCpDayFromMay;
   stats.viewsAllCpsDayFromMay2026 = potential2026.viewsAllCpsDayFromMay;
+  stats.viewsAfterEmailAdjustmentFromMay = viewsAfterEmailAdjustmentFromMay;
+  stats.viewsAfterEmailAdjustmentDetails = {
+    start: '2026-05-01',
+    end: todayIsoForEmailAdjustment,
+    cpBase: cpBaseAfterEmailAdjustment,
+    emailsPerCp: SHERLOCK_EMAILS_POR_CP_APOS_202605,
+    reportsPerCp: SHERLOCK_REPORTS_POR_CP,
+    openingsPerReportDay: SHERLOCK_ABERTURAS_POR_REPORT_DIA,
+    days: daysFromMayForEmailAdjustment,
+    rule: 'COD CP distinto × 4 e-mails × 2 reports × dias desde maio/2026'
+  };
 
   // Cards principais conforme modo
   if (SHERLOCK_CARD_METRIC_MODE === 'POTENTIAL_CAPACITY') {
@@ -1846,11 +1923,7 @@ function api_getAuditExplorerPage(params) {
           nomeNorm.includes('sem registro log') ||
           nomeNorm.includes('capturado mas sem') ||
           nomeNorm.includes('perdido')) continue;
-      if (term) {
-        const hay   = (cod + ' ' + nome + ' ' + ator).toLowerCase();
-        const words = term.split(/\s+/).filter(Boolean);
-        if (!words.every(w => hay.includes(w))) continue;
-      }
+      if (term && !matchesCpSearchByCodeFirst_(term, cod, nome, ator)) continue;
 
       parsed.push({ t: tipo, c: cod, n: nome, d: fDate, dateKey: dateKey,
                     e: canAudit ? auditEmailForUiOnly_(ator) : null,
@@ -2058,9 +2131,7 @@ function buildResponseFromJson_(data, filterParams) {
       if (filterParams) {
         if (filterParams.type && filterParams.type !== '' && tipo !== filterParams.type) continue;
         if (filterParams.term && filterParams.term !== '') {
-          const words = filterParams.term.toLowerCase().trim().split(/\s+/);
-          const hay = (cod + ' ' + nom).toLowerCase();
-          if (!words.every(w => hay.includes(w))) continue;
+          if (!matchesCpSearchByCodeFirst_(filterParams.term, cod, nom, ator)) continue;
         }
         if (dateKey && filterParams.dateFrom && dateKey < filterParams.dateFrom) continue;
         if (dateKey && filterParams.dateTo   && dateKey > filterParams.dateTo)   continue;
@@ -2183,7 +2254,10 @@ function buildResponseFromJson_(data, filterParams) {
         types: [],
         trend: trend,
         historyTotal: audit,
-        suggestions: Array.from(sugs).filter(s => s && s !== 'Unknown').slice(0, 100),
+        suggestions: Array.from(sugs)
+          .map(function(s) { return normalizeCpCode_(s); })
+          .filter(function(s) { return s && s !== 'Unknown'; })
+          .sort(function(a, b) { return a.localeCompare(b, 'pt-BR', { numeric: true }); }),
         cpNames: cpNames,
         lastUpdate: new Date().toISOString()
       },

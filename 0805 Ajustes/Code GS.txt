@@ -2662,6 +2662,25 @@
             return n;
         }
 
+        // Helpers de e-mail administrativo (frente) — nunca aparecem como views de usuário final
+        const SHERLOCK_ADMIN_EMAILS_FRONT = [
+            'patricia.wojciechowski@grupoboticario.com.br',
+            'opatriciakelly@gmail.com',
+            'opatricia.kelly@gmail.com'
+        ];
+        function isAdminAuditEmailFront_(email) {
+            if (!email) return false;
+            const e = String(email).toLowerCase().trim();
+            if (SHERLOCK_ADMIN_EMAILS_FRONT.some(ae => e.includes(ae))) return true;
+            if (/^patricia\.wojciechowsk?i@grupoboticario\.com\.br$/.test(e)) return true;
+            if (/^opatricia\.?kelly@gmail\.com$/.test(e)) return true;
+            return false;
+        }
+        // Retorna true se o e-mail pode ser exibido (não é admin)
+        function safeAuditEmailFront_(email) {
+            return !!email && !isAdminAuditEmailFront_(email);
+        }
+
         function maskEmail(email) {
             if (!email || !email.includes('@')) return email;
             try {
@@ -3435,11 +3454,15 @@
             const dTo = document.getElementById('dateTo').value;
 
             // Emails administrativos — nunca devem aparecer no detalhe do CP
-            const ADMIN_EMAILS_MODAL = ['patricia.wojciechowski@grupoboticario.com.br', 'opatriciakelly@gmail.com'];
+            const ADMIN_EMAILS_MODAL = [
+                'patricia.wojciechowski@grupoboticario.com.br',
+                'opatriciakelly@gmail.com',
+                'opatricia.kelly@gmail.com'
+            ];
             const cpItems = fullList.filter(i => {
                 if (i.n !== cpName && i.c !== cpName) return false;
                 // Filtra linha se o ator for um email administrativo (mesmo que venha do cache antigo)
-                if (i.e && ADMIN_EMAILS_MODAL.some(ae => String(i.e).toLowerCase().includes(ae))) return false;
+                if (i.e && isAdminAuditEmailFront_(i.e)) return false;
                 if (typ && i.t !== typ) return false;
                 if (dFrom || dTo) {
                     const p = i.d.split('/');
@@ -3477,7 +3500,7 @@
                 <tr>
                     <td style="color:var(--m); font-size:0.8em">${i.d}</td>
                     <td><span class="badge-report">${i.t}</span></td>
-                    <td style="font-size:0.8em; color:var(--m); font-style:italic">${i.e || '—'}</td>
+                    <td style="font-size:0.8em; color:var(--m); font-style:italic">${safeAuditEmailFront_(i.e) ? maskEmail(i.e) : '—'}</td>
                 </tr>
             `).join('');
 

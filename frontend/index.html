@@ -4018,47 +4018,8 @@
             const period = document.getElementById('periodFilter')?.value || '';
             const cpCode = normalizeCodCpFront_(cpName) || normalizeCpSearchTermFront_(cpName);
 
-            if (!skipRemoteFallback && period && cpCode) {
-                showToast(`Localizando acessos do CP ${cpCode} em ${period}...`, '🔎');
-
-                google.script.run
-                    .withSuccessHandler(function(res) {
-                        if (!res || res.success === false) {
-                            showToast(res && res.error ? res.error : 'Não foi possível carregar a mini lista do CP.', '⚠️');
-                            return openCpModal(cpName, true);
-                        }
-
-                        const items = Array.isArray(res.list) ? res.list : [];
-
-                        if (!items.length) {
-                            // Se a API vier vazia, tenta abrir com a lista local já carregada
-                            // para não bloquear o usuário na tela do Explorer.
-                            showToast('Sem retorno completo no servidor. Abrindo lista local do período carregado...', '🔎');
-                            return openCpModal(cpName, true);
-                        }
-
-                        renderCpMiniModal_(items, cpName, Number(res.total || items.length));
-                    })
-                    .withFailureHandler(function(err) {
-                        showToast('Falha ao carregar mini lista do CP: ' + err.message, '📡');
-                        openCpModal(cpName, true);
-                    })
-                    .api_getResumoExplorerPage({
-                        period: period,
-                        type: typ,
-                        term: cpCode,
-                        page: 1,
-                        pageSize: 100
-                    });
-
-                return;
-            }
-
-            // Fallback local: usa apenas a página atual carregada.
-            const dFrom = document.getElementById('dateFrom')?.value || '';
-            const dTo = document.getElementById('dateTo')?.value || '';
-
-            const cpItems = (Array.isArray(fullList) ? fullList : []).filter(i => {
+            // Sempre tenta abrir imediatamente com a lista local da tabela atual.
+            const localItems = (Array.isArray(fullList) ? fullList : []).filter(i => {
                 if (!i) return false;
 
                 const sameCp =
@@ -4070,21 +4031,54 @@
                 if (i.e && isAdminAuditEmailFront_(i.e)) return false;
                 if (typ && i.t !== typ) return false;
 
-                if (dFrom || dTo) {
-                    const iso = brDateToIso(i.d || '');
-                    if (dFrom && iso < dFrom) return false;
-                    if (dTo && iso > dTo) return false;
-                }
-
                 return true;
             });
 
-            if (cpItems.length === 0) {
-                showToast('Resumo simbólico não está no recorte rápido da página atual. Use o filtro por CP ou o menu Comprovante PDF.', '🔎');
+            if (localItems.length > 0) {
+                renderCpMiniModal_(localItems, cpName, localItems.length);
+            }
+
+            if (!skipRemoteFallback && period && cpCode) {
+                showToast(`Localizando acessos do CP ${cpCode} em ${period}...`, '🔎');
+
+                google.script.run
+                    .withSuccessHandler(function(res) {
+                        if (!res || res.success === false) {
+                            if (!localItems.length) {
+                                showToast(res && res.error ? res.error : 'Não foi possível carregar a mini lista do CP.', '⚠️');
+                            }
+                            return;
+                        }
+
+                        const items = Array.isArray(res.list) ? res.list : [];
+                        if (!items.length) {
+                            if (!localItems.length) {
+                                showToast('Nenhum acesso encontrado para este CP no mês selecionado.', '🔎');
+                            }
+                            return;
+                        }
+
+                        // Quando houver retorno completo do back, substitui o conteúdo local pelo oficial.
+                        renderCpMiniModal_(items, cpName, Number(res.total || items.length));
+                    })
+                    .withFailureHandler(function(err) {
+                        if (!localItems.length) {
+                            showToast('Falha ao carregar mini lista do CP: ' + err.message, '📡');
+                        }
+                    })
+                    .api_getResumoExplorerPage({
+                        period: period,
+                        type: typ,
+                        term: cpCode,
+                        page: 1,
+                        pageSize: 100
+                    });
                 return;
             }
 
-            renderCpMiniModal_(cpItems, cpName, cpItems.length);
+            if (!localItems.length) {
+                showToast('Resumo simbólico não está no recorte rápido da página atual. Use o filtro por CP ou o menu Comprovante PDF.', '🔎');
+            }
         }
 
         // Alterado Patty - 11/05/2026

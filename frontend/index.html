@@ -3124,6 +3124,24 @@
             } catch (e) { return email; }
         }
 
+        // Alterado Patty - 11/05/2026
+        // Motivo: i.e pode vir cru ou já mascarado do backend.
+        // Evita duplo mascaramento e garante fallback visual.
+        function formatAuditEmailForDisplay_(value) {
+            const raw = String(value || '').trim();
+
+            if (!raw) return '—';
+            if (raw === '— sistema —' || raw === '—') return raw;
+
+            // Já veio mascarado do backend
+            if (raw.includes('*')) return raw;
+
+            // Veio cru (compatibilidade antiga)
+            if (raw.includes('@')) return maskEmail(raw);
+
+            return raw;
+        }
+
         function setLocalizedNumber(id, value) {
             const el = document.getElementById(id);
             if (!el) return;
@@ -3567,12 +3585,11 @@
                         return;
                     }
 
-                    // Mantém estado de auditoria sincronizado com a resposta do backend.
-                    if (typeof res.canAudit === 'boolean') {
-                        canAudit = res.canAudit;
-                    }
+                    // Alterado Patty - 11/05/2026
+                    // Motivo: REGISTRO AUDITADO depende da permissão retornada pelo backend.
+                    canAudit = !!res.canAudit;
 
-                    fullList = res.list || [];
+                    fullList = Array.isArray(res.list) ? res.list : [];
 
                     currentTablePage = Number(res.page || auditExplorerPage || 1);
 
@@ -3671,12 +3688,10 @@
                     ? `<td style="color:var(--m);font-size:0.8em">—</td>`
                     : `<td class="tag">${i.c}</td>`;
                 const safeEmail = auditEmailForUiOnlyFront_(i.e);
+                const emailDisplay = formatAuditEmailForDisplay_(safeEmail);
                 const auditCell = !safeEmail
-                    ? `<td style="font-size:0.75em;color:var(--m);font-style:italic">—</td>`
-                    :
-                    safeEmail === '— sistema —'
-                        ? `<td style="font-size:0.75em;color:var(--m);font-style:italic">— sistema —</td>`
-                        : `<td style="font-size:0.85em;color:#a5b4fc;font-weight:600;letter-spacing:0.03em">${safeEmail}</td>`;
+                    ? `<td style="font-size:0.8em;color:var(--m);font-style:italic">—</td>`
+                    : `<td style="font-size:0.85em;color:#a5b4fc;font-weight:600;letter-spacing:0.03em">${emailDisplay}</td>`;
                 return `<tr data-cpkey="${cpKeyEsc}" style="cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">`+
                     `<td style="color:var(--m);font-size:0.75em">${i.d}</td>`+
                     `<td><span class="badge-report">${i.t}</span></td>`+
@@ -4138,7 +4153,7 @@
                         <td style="color:var(--m); font-size:0.8em">${i.d || '—'}</td>
                         <td><span class="badge-report">${i.t || 'Acesso ao Drive'}</span></td>
                         <td style="font-size:0.85em; color:#fff; font-weight:800; text-align:center;">${views.toLocaleString('pt-BR')}</td>
-                        <td style="font-size:0.8em; color:var(--m); font-style:italic">${safeAuditEmailFront_(i.e) ? maskEmail(i.e) : '—'}</td>
+                        <td style="font-size:0.8em; color:var(--m); font-style:italic">${safeAuditEmailFront_(i.e) ? formatAuditEmailForDisplay_(i.e) : '—'}</td>
                     </tr>
                 `;
             }).join('');
@@ -4229,7 +4244,7 @@
                 const multiplier = i.v || 1;
                 for (let m = 0; m < multiplier; m++) {
                     const label = (multiplier > 1) ? (m % 2 === 0 ? 'Report CI' : 'Report CA') : i.t;
-                    rows.push(`<tr><td>${i.d}</td><td>${label}</td><td>${safeAuditEmailFront_(i.e) ? i.e : '—'}</td></tr>`);
+                    rows.push(`<tr><td>${i.d}</td><td>${label}</td><td>${safeAuditEmailFront_(i.e) ? formatAuditEmailForDisplay_(i.e) : '—'}</td></tr>`);
                 }
             });
             const rowsHtml = rows.join('');

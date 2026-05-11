@@ -1610,7 +1610,31 @@ function SH_buildResumoIdx_(headers) {
     codCp:       pick(['COD DO CP', 'COD CP', 'CODIGO CP', 'COD']),
     nomeCp:      pick(['NOME DO CP', 'NOME CP', 'NOME']),
     data:        pick(['DATA', 'DT']),
-    responsavel: pick(['RESPONSAVEL ATOR', 'RESPONSAVEL', 'RESPONSÁVEL']),
+    // Alterado Patty - 11/05/2026
+    // Motivo: garantir captura do e-mail/ator com variações de cabeçalho.
+    responsavel: pick([
+      'RESPONSAVEL ATOR',
+      'RESPONSÁVEL ATOR',
+      'RESPONSAVEL (ATOR)',
+      'RESPONSÁVEL (ATOR)',
+      'RESPONSAVEL',
+      'RESPONSÁVEL',
+      'ATOR',
+      'USUARIO',
+      'USUÁRIO',
+      'USER',
+      'EMAIL',
+      'E-MAIL',
+      'EMAIL ATOR',
+      'E-MAIL ATOR',
+      'EMAIL USUARIO',
+      'EMAIL USUÁRIO',
+      'EMAIL FRANQUIA',
+      'E-MAIL FRANQUIA',
+      'EMAIL CLIENTE',
+      'E-MAIL CLIENTE',
+      'REGISTRO AUDITADO'
+    ]),
     quantidade:  pick(['QUANTIDADE DE ACESSOS', 'QTD ACESSOS', 'QUANTIDADE', 'QTD', 'VIEWS', 'ACESSOS'])
   };
 }
@@ -1635,7 +1659,10 @@ function SH_readResumoFull_(ssId, sheetName, canAudit, payload) {
   if (!sh) return empty;
 
   var lastRow = sh.getLastRow();
-  var lastCol = Math.min(sh.getLastColumn(), 7);
+  // Alterado Patty - 11/05/2026
+  // Motivo: registro auditado/e-mail pode estar após a coluna G.
+  // Limitar em 7 quebrava idx.responsavel e retornava e vazio no Explorer.
+  var lastCol = sh.getLastColumn();
   if (lastRow < 2) return empty;
 
   var headers = sh.getRange(1, 1, 1, lastCol).getValues()[0];
@@ -1721,12 +1748,25 @@ function SH_readResumoFull_(ssId, sheetName, canAudit, payload) {
       out.cpAgg[codCp].val += qtd;
 
       if (out.list.length < SH_RESUMO_MAX_LIST) {
+        // Alterado Patty - 11/05/2026
+        // Motivo: restaurar campo "e" esperado pelo front no REGISTRO AUDITADO.
+        var emailAuditado = '';
+        if (canAudit && emailRaw) {
+          if (typeof SH_isResumoAdminEmail_ === 'function' && SH_isResumoAdminEmail_(emailRaw)) {
+            emailAuditado = '\u2014 sistema \u2014';
+          } else if (typeof SH_maskEmailForAudit_ === 'function') {
+            emailAuditado = SH_maskEmailForAudit_(emailRaw);
+          } else {
+            emailAuditado = emailRaw;
+          }
+        }
+
         out.list.push({
           d: dispDate,
           t: tipo,
           c: codCp,
           n: nomeCp,
-          e: canAudit ? SH_maskEmailForAudit_(emailRaw) : '',
+          e: emailAuditado || '',
           i: '',      // arquivo_log não existe nos resumos — campo mantido para compatibilidade
           v: qtd,     // 'v' = quantidade, padrão compact do sistema (não usar 'q')
           q: qtd      // alias mantido para retrocompatibilidade

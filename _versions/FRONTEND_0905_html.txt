@@ -1511,7 +1511,7 @@
                         </div>
                         <div style="height:310px"><canvas id="trendChart"></canvas></div>
                         <!-- PAINEL DE RESUMO EXECUTIVO (ABAIXO DO GRÁFICO) -->
-                        <div id="trendSummaryPanel" style="margin-top:20px; padding-top:15px; border-top:1px solid rgba(255,255,255,0.06); display:grid; grid-template-columns: repeat(auto-fit, min-width(120px, 1fr)); gap:15px;">
+                        <div id="trendSummaryPanel" style="margin-top:20px; padding-top:15px; border-top:1px solid rgba(255,255,255,0.06); display:grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap:15px;">
                             <div style="background:rgba(255,255,255,0.03); padding:12px; border-radius:12px; border:1px solid var(--border);">
                                 <div style="font-size:0.65em; color:var(--m); text-transform:uppercase; font-weight:700;">Auditado 2025</div>
                                 <div id="summary2025" style="font-size:1.1em; font-weight:700; color:var(--s); margin-top:4px;">0</div>

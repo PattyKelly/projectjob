@@ -3314,11 +3314,17 @@
             renderExecutiveCards();
 
             // Popula a Última Carga do Servidor
-            const datesArr = Object.keys((stats && stats.trend) ? stats.trend : {}).sort();
+            // Alterado Patty - 11/05/2026
+            // Motivo: Última Carga DB não pode considerar chaves futuras do trend/cache.
+            const datesArr = Object.keys((stats && stats.trend) ? stats.trend : {})
+                .map(normalizeTrendDateKey)
+                .filter(k => k && isAnalyticsDateAllowed_(k))
+                .sort();
             if (datesArr.length > 0) {
                 const ult = datesArr[datesArr.length - 1];
                 const displayDt = ult.split('-').reverse().join('/');
-                document.getElementById('lastSync').innerHTML = `🔄 Última Carga DB: ${displayDt} <span style="display:block; font-size:0.8em; margin-top:4px; opacity:0.9;">(16/03: Nova Carga Manual)</span>`;
+                document.getElementById('lastSync').innerHTML =
+                    `🔄 Última Carga DB: ${displayDt} <span style="display:block; font-size:0.8em; margin-top:4px; opacity:0.9;">Última carga oficial validada</span>`;
             } else {
                 document.getElementById('lastSync').innerHTML = `🔄 Última Carga DB: Indisponível`;
             }
@@ -3344,6 +3350,18 @@
             if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
 
             return '';
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // ANALYTICS — CORTE OFICIAL DE DATA
+        // Alterado Patty - 11/05/2026
+        // Motivo: última carga oficial validada até 30/04/2026.
+        // O gráfico não deve exibir meses posteriores.
+        // ═══════════════════════════════════════════════════════
+        function isAnalyticsDateAllowed_(rawKey) {
+            const iso = normalizeTrendDateKey(rawKey);
+            if (!iso) return false;
+            return iso <= SH_FRONT_MAX_ACCESS_DATE;
         }
 
         function getLocalStrategicSnapshot() {
@@ -4357,25 +4375,31 @@
             const raw = (stats && stats.trend) ? stats.trend : {};
             const grouped = {};
             Object.entries(raw).forEach(([k, v]) => {
+                const isoKey = normalizeTrendDateKey(k);
+
+                // Alterado Patty - 11/05/2026
+                // Motivo: bloquear meses sem carga oficial validada no Analytics.
+                if (!isoKey || !isAnalyticsDateAllowed_(isoKey)) return;
+
                 let bucketKey;
                 if (period === 'year') {
-                    bucketKey = k.substring(0, 4);
+                    bucketKey = isoKey.substring(0, 4);
                 } else if (period === 'semester') {
-                    const yr = k.substring(0, 4);
-                    const mo = parseInt(k.substring(5, 7), 10);
+                    const yr = isoKey.substring(0, 4);
+                    const mo = parseInt(isoKey.substring(5, 7), 10);
                     bucketKey = yr + (mo <= 6 ? '-S1' : '-S2');
                 } else if (period === 'week') {
                     // ISO week: YYYY-Www
-                    const d = new Date(k + 'T00:00:00');
+                    const d = new Date(isoKey + 'T00:00:00');
                     const dayNr = (d.getDay() + 6) % 7;
                     d.setDate(d.getDate() - dayNr + 3);
                     const jan4 = new Date(d.getFullYear(), 0, 4);
                     const wk = 1 + Math.round((d - jan4) / 604800000);
                     bucketKey = d.getFullYear() + '-W' + String(wk).padStart(2, '0');
                 } else {
-                    bucketKey = k.substring(0, 7); // YYYY-MM
+                    bucketKey = isoKey.substring(0, 7); // YYYY-MM
                 }
-                grouped[bucketKey] = (grouped[bucketKey] || 0) + v;
+                grouped[bucketKey] = (grouped[bucketKey] || 0) + toSafeNumber(v);
             });
             const sorted = Object.keys(grouped).sort();
             return { labels: sorted, values: sorted.map(k => grouped[k]) };
@@ -4399,25 +4423,31 @@
             }
 
             Object.entries(raw).forEach(([iso, val]) => {
+                const isoKey = normalizeTrendDateKey(iso);
+
+                // Alterado Patty - 11/05/2026
+                // Motivo: bloquear no gráfico meses maiores que a última carga oficial.
+                if (!isoKey || !isAnalyticsDateAllowed_(isoKey)) return;
+
                 let bucketKey;
                 if (period === 'year') {
-                    bucketKey = iso.substring(0, 4);
+                    bucketKey = isoKey.substring(0, 4);
                 } else if (period === 'semester') {
-                    const yr = iso.substring(0, 4);
-                    const mo = parseInt(iso.substring(5, 7), 10);
+                    const yr = isoKey.substring(0, 4);
+                    const mo = parseInt(isoKey.substring(5, 7), 10);
                     bucketKey = yr + (mo <= 6 ? '-S1' : '-S2');
                 } else if (period === 'week') {
-                    const dt = new Date(iso + 'T00:00:00');
+                    const dt = new Date(isoKey + 'T00:00:00');
                     const dayNr = (dt.getDay() + 6) % 7;
                     dt.setDate(dt.getDate() - dayNr + 3);
                     const jan4 = new Date(dt.getFullYear(), 0, 4);
                     const wk = 1 + Math.round((dt - jan4) / 604800000);
                     bucketKey = dt.getFullYear() + '-W' + String(wk).padStart(2, '0');
                 } else {
-                    bucketKey = iso.substring(0, 7);
+                    bucketKey = isoKey.substring(0, 7);
                 }
-                ca[bucketKey] = (ca[bucketKey] || 0) + (val.ca || 0);
-                ci[bucketKey] = (ci[bucketKey] || 0) + (val.ci || 0);
+                ca[bucketKey] = (ca[bucketKey] || 0) + toSafeNumber(val && val.ca);
+                ci[bucketKey] = (ci[bucketKey] || 0) + toSafeNumber(val && val.ci);
             });
             const allKeys = [...new Set([...Object.keys(ca), ...Object.keys(ci)])].sort();
             return {

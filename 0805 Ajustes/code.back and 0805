@@ -1505,6 +1505,70 @@ function SH_getResumoMaxDate_() {
   return todayIso;
 }
 
+// ═══════════════════════════════════════════════════════
+// SHERLOCK — CORTE OFICIAL DE DATA PARA ANALYTICS/TREND
+// Alterado Patty - 11/05/2026
+// Motivo: impedir que meses sem carga validada entrem no Analytics.
+// Última carga oficial validada: 30/04/2026.
+// ═══════════════════════════════════════════════════════
+
+function SH_filterTrendByMaxAccessDate_(trendMap) {
+  var maxDate = SH_getResumoMaxDate_ ? SH_getResumoMaxDate_() : '2026-04-30';
+  var out = {};
+  var src = trendMap || {};
+
+  Object.keys(src).forEach(function(k) {
+    var key = String(k || '').trim();
+
+    // Esperado: YYYY-MM-DD
+    var iso = '';
+    var mIso = key.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (mIso) {
+      iso = mIso[1] + '-' + mIso[2] + '-' + mIso[3];
+    } else {
+      var mBr = key.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+      if (mBr) iso = mBr[3] + '-' + mBr[2] + '-' + mBr[1];
+    }
+
+    if (!iso) return;
+    if (iso > maxDate) return;
+
+    out[iso] = (out[iso] || 0) + (Number(src[k]) || 0);
+  });
+
+  return out;
+}
+
+function SH_filterTrendSplitByMaxAccessDate_(trendSplitMap) {
+  var maxDate = SH_getResumoMaxDate_ ? SH_getResumoMaxDate_() : '2026-04-30';
+  var out = {};
+  var src = trendSplitMap || {};
+
+  Object.keys(src).forEach(function(k) {
+    var key = String(k || '').trim();
+
+    var iso = '';
+    var mIso = key.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (mIso) {
+      iso = mIso[1] + '-' + mIso[2] + '-' + mIso[3];
+    } else {
+      var mBr = key.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+      if (mBr) iso = mBr[3] + '-' + mBr[2] + '-' + mBr[1];
+    }
+
+    if (!iso) return;
+    if (iso > maxDate) return;
+
+    var val = src[k] || {};
+    if (!out[iso]) out[iso] = { ca: 0, ci: 0 };
+
+    out[iso].ca += Number(val.ca || 0);
+    out[iso].ci += Number(val.ci || 0);
+  });
+
+  return out;
+}
+
 function SH_normalizeTipoReport_(tipo) {
   var t = String(tipo || '').trim().toUpperCase();
   if (t === 'CI') return 'Report CI';
@@ -1710,6 +1774,10 @@ function getResumoAuditData(payload) {
   });
   var cpsAll = Object.assign({}, r2025.cpDistinct, r2026.cpDistinct);
 
+  // Alterado Patty - 11/05/2026
+  // Motivo: Analytics não pode receber meses acima da última carga oficial validada.
+  trendAll = SH_filterTrendByMaxAccessDate_(trendAll);
+
   var statsObj = {
     audit:        r2025.views + r2026.views,
     audit2025:    r2025.views,
@@ -1734,6 +1802,12 @@ function getResumoAuditData(payload) {
       capped:              (r2025.totalRows + r2026.totalRows) > SH_RESUMO_MAX_LIST
     }
   };
+
+  // Defesa extra: se alguma rotina anterior/preexistente anexar trendSplit,
+  // ele também deve ser cortado.
+  if (statsObj.trendSplit) {
+    statsObj.trendSplit = SH_filterTrendSplitByMaxAccessDate_(statsObj.trendSplit);
+  }
 
   // Cards executivos — objeto próprio para o front não adivinhar campo
   statsObj.cards = SH_buildExecutiveCards_(statsObj);

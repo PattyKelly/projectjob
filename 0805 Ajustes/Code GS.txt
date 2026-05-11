@@ -2662,24 +2662,28 @@
             return n;
         }
 
-        // Helpers de e-mail administrativo (frente) — nunca aparecem como views de usuário final
-        const SHERLOCK_ADMIN_EMAILS_FRONT = [
+        // Helpers LGPD — oculta apenas e-mails dev/admin específicos; todos os outros continuam mascarados
+        const SHERLOCK_DEV_EMAILS_HIDE_FRONT = [
             'patricia.wojciechowski@grupoboticario.com.br',
             'opatriciakelly@gmail.com',
             'opatricia.kelly@gmail.com'
         ];
-        function isAdminAuditEmailFront_(email) {
+        function isDevAdminEmailToHideOnlyFront_(email) {
             if (!email) return false;
             const e = String(email).toLowerCase().trim();
-            if (SHERLOCK_ADMIN_EMAILS_FRONT.some(ae => e.includes(ae))) return true;
-            if (/^patricia\.wojciechowsk?i@grupoboticario\.com\.br$/.test(e)) return true;
-            if (/^opatricia\.?kelly@gmail\.com$/.test(e)) return true;
+            if (SHERLOCK_DEV_EMAILS_HIDE_FRONT.includes(e)) return true;
+            if (/^patricia\.wojciechowsk?i@grupoboticario\.com\.br$/i.test(e)) return true;
+            if (/^opatricia\.?kelly@gmail\.com$/i.test(e)) return true;
             return false;
         }
-        // Retorna true se o e-mail pode ser exibido (não é admin)
-        function safeAuditEmailFront_(email) {
-            return !!email && !isAdminAuditEmailFront_(email);
+        function auditEmailForUiOnlyFront_(value) {
+            if (!value) return null;
+            if (isDevAdminEmailToHideOnlyFront_(value)) return null;
+            return value;
         }
+        // Alias para compatibilidade com código existente no modal CP
+        function isAdminAuditEmailFront_(email) { return isDevAdminEmailToHideOnlyFront_(email); }
+        function safeAuditEmailFront_(email) { return !!email && !isDevAdminEmailToHideOnlyFront_(email); }
 
         function maskEmail(email) {
             if (!email || !email.includes('@')) return email;
@@ -3106,10 +3110,11 @@
                 const codCell = (i.c === 'Unknown' || !i.c)
                     ? `<td style="color:var(--m);font-size:0.8em">—</td>`
                     : `<td class="tag">${i.c}</td>`;
-                const auditCell = !i.e ? '' :
-                    i.e === '— sistema —'
+                const safeEmail = auditEmailForUiOnlyFront_(i.e);
+                const auditCell = !safeEmail ? '' :
+                    safeEmail === '— sistema —'
                         ? `<td style="font-size:0.75em;color:var(--m);font-style:italic">— sistema —</td>`
-                        : `<td style="font-size:0.85em;color:#a5b4fc;font-weight:600;letter-spacing:0.03em">${maskEmail(i.e)}</td>`;
+                        : `<td style="font-size:0.85em;color:#a5b4fc;font-weight:600;letter-spacing:0.03em">${maskEmail(safeEmail)}</td>`;
                 return `<tr data-cpkey="${cpKeyEsc}" style="cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">`+
                     `<td style="color:var(--m);font-size:0.75em">${i.d}</td>`+
                     `<td><span class="badge-report">${i.t}</span></td>`+

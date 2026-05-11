@@ -50,8 +50,53 @@ function internal_logAccess_(user) {
 
 const SHERLOCK_ADMIN_EMAILS = [
   'patricia.wojciechowski@grupoboticario.com.br',
-  'opatriciakelly@gmail.com'
+  'opatriciakelly@gmail.com',
+  'opatricia.kelly@gmail.com'
 ];
+
+// ═══════════════════════════════════════════════════════════
+// LGPD — OCULTAR SOMENTE E-MAILS DEV/ADMIN ESPECÍFICOS
+// Regra: mantém todos os outros e-mails de franquia/usuário.
+// Apenas retorna null para os e-mails da Patty (dev/admin).
+// ═══════════════════════════════════════════════════════════
+
+const SHERLOCK_DEV_EMAILS_HIDE_ONLY = [
+  'patricia.wojciechowski@grupoboticario.com.br',
+  'opatriciakelly@gmail.com',
+  'opatricia.kelly@gmail.com'
+];
+
+function normalizeAuditEmailOnly_(value) {
+  const raw = String(value || '').toLowerCase().trim();
+  if (!raw) return '';
+  const match = raw.match(/[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/i);
+  return match ? String(match[0]).toLowerCase().trim() : raw;
+}
+
+function isDevAdminEmailToHideOnly_(value) {
+  const email = normalizeAuditEmailOnly_(value);
+  if (!email) return false;
+  if (SHERLOCK_DEV_EMAILS_HIDE_ONLY.includes(email)) return true;
+  if (/^patricia\.wojciechowsk?i@grupoboticario\.com\.br$/i.test(email)) return true;
+  if (/^opatricia\.?kelly@gmail\.com$/i.test(email)) return true;
+  return false;
+}
+
+function auditEmailForUiOnly_(value) {
+  const email = normalizeAuditEmailOnly_(value);
+  if (!email) return null;
+  if (isDevAdminEmailToHideOnly_(email)) return null;
+  return email;
+}
+
+function sanitizeAuditListEmailOnly_(list) {
+  if (!Array.isArray(list)) return [];
+  return list.map(function(row) {
+    const clean = Object.assign({}, row);
+    clean.e = auditEmailForUiOnly_(clean.e);
+    return clean;
+  });
+}
 
 function getActiveUserEmailSafe_() {
   try {
@@ -1501,7 +1546,7 @@ function getHomeSnapshotFast() {
 
     // A home não precisa receber lista gigante
     if (Array.isArray(data.list)) {
-      data.list = data.list.slice(0, 300);
+      data.list = sanitizeAuditListEmailOnly_(data.list).slice(0, 300);
       data.isLimited = true;
     }
 
@@ -1808,7 +1853,7 @@ function api_getAuditExplorerPage(params) {
       }
 
       parsed.push({ t: tipo, c: cod, n: nome, d: fDate, dateKey: dateKey,
-                    e: canAudit ? ator : null,
+                    e: canAudit ? auditEmailForUiOnly_(ator) : null,
                     i: String(row['ARQUIVO_LOG'] || ''), v: Number(row['QUANTIDADE DE ACESSOS'] || 1) });
     }
 
@@ -1824,7 +1869,7 @@ function api_getAuditExplorerPage(params) {
     return {
       success: true, period: period, page: page, pageSize: pageSize,
       total: total, totalPages: Math.ceil(total / pageSize),
-      list: parsed.slice(start, start + pageSize)
+      list: sanitizeAuditListEmailOnly_(parsed.slice(start, start + pageSize))
     };
   } catch(e) {
     return { success: false, error: 'Erro ao carregar Audit Log Explorer: ' + e.toString() };
@@ -2051,7 +2096,7 @@ function buildResponseFromJson_(data, filterParams) {
       }
 
       if (resultData.length < limitList - 1 && auditValue > 0) {
-        const regAuditado = canAudit ? ator : null;
+        const regAuditado = canAudit ? auditEmailForUiOnly_(ator) : null;
         resultData.push({ t: tipo, c: cod, n: nom, d: fDate, e: regAuditado, i: String(row['ARQUIVO_LOG'] || ''), v: auditValue });
       }
     }
@@ -2310,7 +2355,7 @@ function getCpEvidenceData(cpInput, dateFrom, dateTo) {
         c: cod,
         n: nome,
         d: dCtx ? dCtx.f : String(row['DATA'] || ''),
-        e: canAudit ? actor : null,
+        e: canAudit ? auditEmailForUiOnly_(actor) : null,
         i: String(row['ARQUIVO_LOG'] || row['ARQUIVO'] || ''),
         v: auditValue
       });

@@ -1088,70 +1088,138 @@ function internal_processSheetsData_(filterParams) {
 const CACHE_FILE_NAME = 'sherlock_v59_snapshot.json';
 
 // ═══════════════════════════════════════════════════════════
-// MÉTRICAS OFICIAIS — CAMADA DE NEGÓCIO SHERLOCK
+// MÉTRICAS OFICIAIS — SHERLOCK VIEWS
 // Alterado Patty - 10/05/2026
 // Motivo:
-// - O snapshot Python é a melhor fonte operacional rápida,
-//   mas o histórico 2025 do Drive não está completo.
-// - Para cards oficiais, preservar número histórico validado.
-// - Para 2026, usar snapshot com ajuste de paridade CI/CA.
+// - Separar views auditadas de views potenciais/capacidade.
+// - Regra auditada: CP + e-mail/ator + dia × 2 reports.
+// - Regra potencial: CPs no cesto × e-mails esperados × 2 reports × dias.
+// - A partir de 05/2026, considerar 4 e-mails por CP.
 // ═══════════════════════════════════════════════════════════
 
-const SHERLOCK_OFFICIAL_2025_VIEWS = 56000;
-const SHERLOCK_OFFICIAL_CP_REPORTS = 378;
-const SHERLOCK_OFFICIAL_SEM_FVC    = 40; // CPs não ativos (fora da carteira FVC ativa)
+const SHERLOCK_OFFICIAL_2025_VIEWS          = 56000; // ajuste para o número exato validado, se necessário
+const SHERLOCK_CP_CESTO_OFICIAL             = 378;
+const SHERLOCK_REPORTS_POR_CP               = 2;     // CI + CA
+const SHERLOCK_EMAILS_POR_CP_ATE_202604     = 2;
+const SHERLOCK_EMAILS_POR_CP_APOS_202605    = 4;
+const SHERLOCK_ABERTURAS_POR_REPORT_DIA     = 1;     // troque para 2 se quiser considerar 2 aberturas por report/dia
+const SHERLOCK_OFFICIAL_SEM_FVC             = 40;    // CPs não ativos (fora da carteira FVC ativa)
 
-function sumTrendSplitParityByYear_(trendSplit, year) {
-  let ca = 0, ci = 0, outros = 0;
-  const keys = Object.keys(trendSplit || {});
-  for (let i = 0; i < keys.length; i++) {
-    const dateKey = String(keys[i] || '');
-    if (!dateKey.startsWith(String(year))) continue;
-    const item = trendSplit[dateKey] || {};
-    ca     += Number(item.ca)     || 0;
-    ci     += Number(item.ci)     || 0;
-    outros += Number(item.outros) || 0;
-  }
-  // Regra de negócio: CI e CA em paridade; "outros" mantém bruto.
-  return Math.max(ca, ci) * 2 + outros;
+// Modo do card principal:
+// AUDITED_PLUS_HISTORICAL = card usa 2025 oficial + 2026 auditado pelo Sherlock
+// POTENTIAL_CAPACITY      = card usa 2025 oficial + capacidade/potencial 2026
+const SHERLOCK_CARD_METRIC_MODE = 'AUDITED_PLUS_HISTORICAL';
+
+function sherlockToIsoDateLocal_(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  if (isNaN(dt.getTime())) return '';
+  const yyyy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function sherlockDiffDaysInclusive_(startIso, endIso) {
+  const s = new Date(String(startIso) + 'T00:00:00');
+  const e = new Date(String(endIso)   + 'T00:00:00');
+  if (isNaN(s.getTime()) || isNaN(e.getTime()) || s > e) return 0;
+  return Math.floor((e - s) / (24 * 60 * 60 * 1000)) + 1;
+}
+
+function sherlockIntersectionDays_(rangeStart, rangeEnd, blockStart, blockEnd) {
+  const start = String(rangeStart) > String(blockStart) ? String(rangeStart) : String(blockStart);
+  const end   = String(rangeEnd)   < String(blockEnd)   ? String(rangeEnd)   : String(blockEnd);
+  return sherlockDiffDaysInclusive_(start, end);
+}
+
+function calculateSherlockPotentialViews2026_(dateFrom, dateTo) {
+  const todayIso = sherlockToIsoDateLocal_(new Date());
+  const start    = String(dateFrom || '2026-01-01');
+  const endRaw   = String(dateTo   || todayIso);
+  const end      = endRaw > todayIso ? todayIso : endRaw;
+
+  const daysBeforeMay = sherlockIntersectionDays_(start, end, '2026-01-01', '2026-04-30');
+  const daysFromMay   = sherlockIntersectionDays_(start, end, '2026-05-01', '2026-12-31');
+
+  const viewsPerCpDayBeforeMay = SHERLOCK_EMAILS_POR_CP_ATE_202604  * SHERLOCK_REPORTS_POR_CP * SHERLOCK_ABERTURAS_POR_REPORT_DIA;
+  const viewsPerCpDayFromMay   = SHERLOCK_EMAILS_POR_CP_APOS_202605 * SHERLOCK_REPORTS_POR_CP * SHERLOCK_ABERTURAS_POR_REPORT_DIA;
+
+  const totalBeforeMay = SHERLOCK_CP_CESTO_OFICIAL * viewsPerCpDayBeforeMay * daysBeforeMay;
+  const totalFromMay   = SHERLOCK_CP_CESTO_OFICIAL * viewsPerCpDayFromMay   * daysFromMay;
+
+  return {
+    success: true,
+    start: start,
+    end: end,
+    cpBase: SHERLOCK_CP_CESTO_OFICIAL,
+    reportsPerCp: SHERLOCK_REPORTS_POR_CP,
+    openingsPerReportDay: SHERLOCK_ABERTURAS_POR_REPORT_DIA,
+    emailsPerCpBeforeMay: SHERLOCK_EMAILS_POR_CP_ATE_202604,
+    emailsPerCpFromMay:   SHERLOCK_EMAILS_POR_CP_APOS_202605,
+    daysBeforeMay: daysBeforeMay,
+    daysFromMay:   daysFromMay,
+    viewsPerCpDayBeforeMay:   viewsPerCpDayBeforeMay,
+    viewsPerCpDayFromMay:     viewsPerCpDayFromMay,
+    viewsAllCpsDayBeforeMay:  SHERLOCK_CP_CESTO_OFICIAL * viewsPerCpDayBeforeMay,
+    viewsAllCpsDayFromMay:    SHERLOCK_CP_CESTO_OFICIAL * viewsPerCpDayFromMay,
+    totalBeforeMay: totalBeforeMay,
+    totalFromMay:   totalFromMay,
+    total: totalBeforeMay + totalFromMay,
+    rule: 'CPs × e-mails por CP × 2 reports × aberturas por report/dia'
+  };
 }
 
 function applySherlockOfficialMetrics_(data) {
   if (!data || !data.stats) return data;
   const stats = data.stats;
 
-  const rawAudit = Number(stats.audit) || 0;
-  const raw2025  = Number(stats.viewsRaw2025  || stats.audit2025)  || 0;
-  const raw2026  = Number(stats.viewsRaw2026  || stats.audit2026)  || 0;
+  const rawAudit  = Number(stats.audit)                            || 0;
+  const raw2025   = Number(stats.viewsRaw2025  || stats.audit2025) || 0;
+  const raw2026   = Number(stats.viewsRaw2026  || stats.audit2026) || 0;
+  const unique2025 = Number(stats.auditUnique2025)                 || 0;
+  const unique2026 = Number(stats.auditUnique2026)                 || 0;
 
-  const parity2026    = sumTrendSplitParityByYear_(stats.trendSplit, '2026');
-  const official2025  = Math.max(raw2025, SHERLOCK_OFFICIAL_2025_VIEWS);
-  const official2026  = Math.max(raw2026, parity2026 || 0);
+  const official2025   = Math.max(SHERLOCK_OFFICIAL_2025_VIEWS, raw2025, unique2025);
+  const audited2026    = unique2026 > 0 ? unique2026 : raw2026;
+  const potential2026  = calculateSherlockPotentialViews2026_('2026-01-01', null);
 
-  stats.auditRaw       = rawAudit;
-  stats.audit2025Raw   = raw2025;
-  stats.audit2026Raw   = raw2026;
+  // Rastreabilidade
+  stats.auditRaw           = rawAudit;
+  stats.audit2025Raw       = raw2025;
+  stats.audit2026Raw       = raw2026;
+  stats.auditUnique2025Raw = unique2025;
+  stats.auditUnique2026Raw = unique2026;
 
-  stats.viewsOfficial2025 = official2025;
-  stats.viewsOfficial2026 = official2026;
-  stats.viewsOfficial     = official2025 + official2026;
+  stats.viewsOfficial2025        = official2025;
+  stats.viewsAudited2026         = audited2026;
+  stats.viewsPotential2026       = potential2026.total;
+  stats.viewsPotential2026Details = potential2026;
+  stats.viewsPerCpDayFromMay2026  = potential2026.viewsPerCpDayFromMay;
+  stats.viewsAllCpsDayFromMay2026 = potential2026.viewsAllCpsDayFromMay;
 
-  // Compatibilidade com os cards atuais do front.
-  stats.audit2025 = official2025;
-  stats.audit2026 = official2026;
-  stats.audit     = official2025 + official2026;
+  // Cards principais conforme modo
+  if (SHERLOCK_CARD_METRIC_MODE === 'POTENTIAL_CAPACITY') {
+    stats.audit2025 = official2025;
+    stats.audit2026 = potential2026.total;
+    stats.audit     = official2025 + potential2026.total;
+    stats.businessMetricMode = 'POTENTIAL_CAPACITY_378_CP_EMAILS_REPORTS';
+  } else {
+    stats.audit2025 = official2025;
+    stats.audit2026 = audited2026;
+    stats.audit     = official2025 + audited2026;
+    stats.businessMetricMode = 'AUDITED_CP_EMAIL_DAY_X2_PLUS_2025_OFFICIAL';
+  }
 
-  stats.audit2026Parity    = parity2026;
-  stats.businessMetricMode = 'HYBRID_2025_MANUAL_2026_SNAPSHOT_PARITY';
+  stats.businessMetricDescription =
+    'Views = CP + e-mail/ator + dia × 2 reports. Capacidade = CPs × e-mails esperados × 2 reports × dias.';
 
   stats.cpsRaw = Number(stats.cps) || 0;
-  stats.cps    = Math.max(stats.cpsRaw, SHERLOCK_OFFICIAL_CP_REPORTS);
+  stats.cps    = Math.max(stats.cpsRaw, SHERLOCK_CP_CESTO_OFICIAL);
 
   stats.semFvcCount  = SHERLOCK_OFFICIAL_SEM_FVC;
   stats.semFvcSource = 'FIXO_MANUAL_VALIDADO_CPS_NAO_ATIVOS';
 
-  // Evita leitura FVC/carteira na home.
-  stats.fvcOutsideCurrentCycle = stats.fvcOutsideCurrentCycle || {
+  stats.fvcOutsideCurrentCycle = {
     success: true,
     sourceMethod: 'SNAPSHOT_ONLY_MANUAL',
     totalCpFvc: 0,

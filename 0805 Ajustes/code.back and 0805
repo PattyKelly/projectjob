@@ -1319,17 +1319,27 @@ function applySherlockOfficialMetrics_(data) {
     rule: 'COD CP distinto × 4 e-mails × 2 reports × dias desde maio/2026'
   };
 
-  // Cards principais conforme modo
-  if (SHERLOCK_CARD_METRIC_MODE === 'POTENTIAL_CAPACITY') {
-    stats.audit2025 = official2025;
-    stats.audit2026 = potential2026.total;
-    stats.audit     = official2025 + potential2026.total;
-    stats.businessMetricMode = 'POTENTIAL_CAPACITY_378_CP_EMAILS_REPORTS';
+  // Patty 11/05/2026: stats.cards gerado pelo Python ou por getResumoAuditData tem prioridade.
+  // applySherlockOfficialMetrics_ NÃO sobrescreve stats.cards nem audit2025/audit2026 quando
+  // os valores reais já foram preenchidos pelo resumo oficial.
+  const cardsJaPreenchidos = stats.cards &&
+    (Number(stats.cards.views2025) > 0 || Number(stats.cards.views2026) > 0);
+
+  if (!cardsJaPreenchidos) {
+    // Cards principais conforme modo (somente quando resumo oficial não está disponível)
+    if (SHERLOCK_CARD_METRIC_MODE === 'POTENTIAL_CAPACITY') {
+      stats.audit2025 = official2025;
+      stats.audit2026 = potential2026.total;
+      stats.audit     = official2025 + potential2026.total;
+      stats.businessMetricMode = 'POTENTIAL_CAPACITY_378_CP_EMAILS_REPORTS';
+    } else {
+      stats.audit2025 = official2025;
+      stats.audit2026 = audited2026;
+      stats.audit     = official2025 + audited2026;
+      stats.businessMetricMode = 'AUDITED_CP_EMAIL_DAY_X2_PLUS_2025_OFFICIAL';
+    }
   } else {
-    stats.audit2025 = official2025;
-    stats.audit2026 = audited2026;
-    stats.audit     = official2025 + audited2026;
-    stats.businessMetricMode = 'AUDITED_CP_EMAIL_DAY_X2_PLUS_2025_OFFICIAL';
+    stats.businessMetricMode = 'RESUMO_OFICIAL_SHEETS_PRIORITY';
   }
 
   stats.businessMetricDescription =
@@ -1396,12 +1406,13 @@ var SH_RESUMO_CHUNK_SIZE  = 10000;   // linhas por leitura para não estourar me
 var SH_RESUMO_MAX_LIST    = 25000;   // 500 páginas × 50 linhas para o Explorer
 
 // Padrões admin/sistema para excluir das views de cliente
+// Patty 11/05/2026: removido 'redeboticario.com.br' — muito amplo, pode cortar dados válidos de consumo real.
+// Manter apenas e-mails específicos de dev/admin conhecidos.
 var SH_RESUMO_ADMIN_PATTERNS = [
   'patricia.wojciechowski@grupoboticario.com.br',
   'opatriciakelly@gmail.com',
   'opatricia.kelly@gmail.com',
-  'wojciechowski',
-  'redeboticario.com.br'
+  'wojciechowski'
 ];
 
 function SH_isResumoAdminEmail_(email) {
@@ -1454,7 +1465,7 @@ function SH_buildResumoIdx_(headers) {
     nomeCp:      pick(['NOME DO CP', 'NOME CP', 'NOME']),
     data:        pick(['DATA', 'DT']),
     responsavel: pick(['RESPONSAVEL ATOR', 'RESPONSAVEL', 'RESPONSÁVEL']),
-    quantidade:  pick(['QUANTIDADE', 'QTD'])
+    quantidade:  pick(['QUANTIDADE DE ACESSOS', 'QTD ACESSOS', 'QUANTIDADE', 'QTD', 'VIEWS', 'ACESSOS'])
   };
 }
 

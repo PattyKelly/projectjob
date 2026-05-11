@@ -2422,6 +2422,93 @@ function loadJsonMonthlyDataByPeriods_(periods) {
   return { success: true, data: rows };
 }
 
+// ═══════════════════════════════════════════════════════
+// SHERLOCK — LEITURA ROBUSTA DO ATOR / E-MAIL
+// Alterado Patty - 10/05/2026
+// Motivo: restaurar contrato antigo do front, que espera o campo "e"
+// preenchido com o registro auditado/e-mail mascarado.
+// Admin/dev continua oculto. Cliente/franquia continua visível mascarado.
+// ═══════════════════════════════════════════════════════
+
+const SHERLOCK_AUDIT_ALLOWED_EMAILS = [
+  'patricia.wojciechowski@grupoboticario.com.br',
+  'opatriciakelly@gmail.com',
+  'opatricia.kelly@gmail.com'
+];
+
+function canCurrentUserAudit_() {
+  try {
+    var email = String(Session.getActiveUser().getEmail() || '')
+      .toLowerCase()
+      .trim();
+    return SHERLOCK_AUDIT_ALLOWED_EMAILS.indexOf(email) >= 0;
+  } catch (e) {
+    return false;
+  }
+}
+
+function SH_getFirstValueByAliases_(row, aliases) {
+  if (!row || typeof row !== 'object') return '';
+  for (var i = 0; i < aliases.length; i++) {
+    var key = aliases[i];
+    if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== '') {
+      return row[key];
+    }
+  }
+  return '';
+}
+
+function SH_getActorEmailRaw_(row) {
+  return SH_getFirstValueByAliases_(row, [
+    'RESPONS\u00c1VEL (ATOR)',
+    'RESPONSAVEL (ATOR)',
+    'RESPONS\u00c3VEL (ATOR)',
+    'RESPONS\u00c1VEL',
+    'RESPONSAVEL',
+    'ATOR',
+    'ACTOR',
+    'USER',
+    'USUARIO',
+    'USU\u00c1RIO',
+    'EMAIL',
+    'E-MAIL',
+    'EMAIL ATOR',
+    'E-MAIL ATOR',
+    'EMAIL_USUARIO',
+    'EMAIL USUARIO',
+    'EMAIL USU\u00c1RIO',
+    'registro_auditado',
+    'REGISTRO AUDITADO',
+    'email',
+    'e'
+  ]);
+}
+
+function SH_normalizeEmail_(value) {
+  return String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/^mailto:/i, '')
+    .replace(/[<>"]/g, '');
+}
+
+function SH_isAdminActorToHide_(email) {
+  var e = SH_normalizeEmail_(email);
+  return SHERLOCK_AUDIT_ALLOWED_EMAILS.indexOf(e) >= 0;
+}
+
+function SH_maskEmailForAudit_(email) {
+  var e = SH_normalizeEmail_(email);
+  if (!e || e.indexOf('@') < 0) return '';
+  var parts = e.split('@');
+  var user = parts[0];
+  var domain = parts[1];
+  if (!user || !domain) return '';
+  var start = user.substring(0, Math.min(2, user.length));
+  var end = user.length > 4 ? user.substring(user.length - 1) : '';
+  return start + '***' + end + '@' + domain;
+}
+
 function getCpEvidenceData(cpInput, dateFrom, dateTo) {
   try {
     const raw = String(cpInput || '').trim();
@@ -2442,13 +2529,15 @@ function getCpEvidenceData(cpInput, dateFrom, dateTo) {
     // Sem leitura de produto/FVC — cada linha representa evidência real do log
     const cpProductMap = {};
 
-    const AUDIT_ALLOWED = ['patricia.wojciechowski@grupoboticario.com.br', 'opatriciakelly@gmail.com'];
-    let canAudit = false;
-    try { canAudit = AUDIT_ALLOWED.some(ae => Session.getActiveUser().getEmail().toLowerCase() === ae); } catch(e) {}
+    // Alterado Patty - 10/05/2026
+    // Motivo: a permissão de auditoria deve incluir opatricia.kelly@gmail.com.
+    // Antes, AUDIT_ALLOWED só tinha opatriciakelly@gmail.com (sem ponto), causando canAudit=false.
+    const canAudit = canCurrentUserAudit_();
 
     const ADMIN_EMAILS_EXCLUIR = {
       'patricia.wojciechowski@grupoboticario.com.br': true,
-      'opatriciakelly@gmail.com': true
+      'opatriciakelly@gmail.com': true,
+      'opatricia.kelly@gmail.com': true
     };
     const todayKey = toIsoDateLocal_(new Date());
     const list = [];
@@ -2501,12 +2590,22 @@ function getCpEvidenceData(cpInput, dateFrom, dateTo) {
         auditValue = getQuantityFromAuditRow_(row);
       }
 
+      const actorRawSH = SH_getActorEmailRaw_(row);
+      const actorEmailSH = SH_normalizeEmail_(actorRawSH);
+
+      let auditEmail = '';
+      if (actorEmailSH && !SH_isAdminActorToHide_(actorEmailSH)) {
+        auditEmail = SH_maskEmailForAudit_(actorEmailSH);
+      } else if (actorEmailSH && SH_isAdminActorToHide_(actorEmailSH)) {
+        auditEmail = '\u2014 sistema \u2014';
+      }
+
       list.push({
         t: tipo,
         c: cod,
         n: nome,
         d: dCtx ? dCtx.f : String(row['DATA'] || ''),
-        e: canAudit ? auditEmailForUiOnly_(actor) : null,
+        e: canAudit ? auditEmail : '',
         i: String(row['ARQUIVO_LOG'] || row['ARQUIVO'] || ''),
         v: auditValue
       });

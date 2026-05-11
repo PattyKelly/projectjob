@@ -2333,7 +2333,10 @@
                     const agora = new Date().toLocaleString('pt-BR');
 
                     const rows = cpItems.map(i => {
-                        const emailAuditoria = res.canAudit && i.e ? maskEmail(i.e) : '—';
+                        // Alterado Patty - 10/05/2026
+                        // Motivo: i.e já vem pré-mascarado do backend (SH_maskEmailForAudit_).
+                        // Não chamar maskEmail() aqui para evitar duplo-mascaramento.
+                        const emailAuditoria = res.canAudit && i.e ? i.e : '—';
                         return `<tr><td>${i.d}</td><td>${i.t}</td><td>${emailAuditoria}</td></tr>`;
                     }).join('');
 

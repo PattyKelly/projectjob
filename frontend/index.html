@@ -1345,6 +1345,100 @@
         /* Insight box */
         .an-insight-box { display: flex; gap: 8px; align-items: flex-start; background: rgba(255,215,0,0.06); border: 1px solid rgba(255,215,0,0.15); border-radius: 12px; padding: 12px 14px; margin-top: 14px; font-size: 0.8em; color: #fcd34d; line-height: 1.5; }
 
+        /* Alterado Patty - 11/05/2026
+           Motivo: corrigir seletor de mês do Audit Log Explorer.
+           O select nativo abria com fundo branco/fonte branca e para cima. */
+        .period-native-hidden {
+            display: none !important;
+        }
+
+        .period-picker {
+            position: relative;
+            min-width: 220px;
+            flex: 0 0 220px;
+            z-index: 50;
+        }
+
+        .period-picker-btn {
+            width: 100%;
+            min-height: 48px;
+            padding: 10px 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: linear-gradient(140deg, rgba(31, 34, 46, 0.98), rgba(15, 23, 42, 0.98));
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 0.95em;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            cursor: pointer;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+
+        .period-picker-btn:hover {
+            border-color: rgba(38,79,236,0.45);
+            box-shadow: 0 0 0 3px rgba(38,79,236,0.12);
+        }
+
+        .period-picker-arrow {
+            color: #cbd5e1;
+            font-size: 1em;
+        }
+
+        .period-picker-menu {
+            display: none;
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 0;
+            width: 100%;
+            max-height: 320px;
+            overflow-y: auto;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.14);
+            background: #0f172a;
+            color: #ffffff;
+            box-shadow: 0 22px 60px rgba(0,0,0,0.65);
+            z-index: 99999;
+            padding: 8px;
+        }
+
+        .period-picker.open .period-picker-menu {
+            display: block;
+        }
+
+        .period-picker-group {
+            padding: 8px 10px 5px;
+            color: #94a3b8;
+            font-size: 0.72em;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        .period-picker-option {
+            width: 100%;
+            border: 0;
+            background: transparent;
+            color: #ffffff;
+            text-align: left;
+            padding: 10px 12px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+
+        .period-picker-option:hover {
+            background: rgba(38,79,236,0.22);
+        }
+
+        .period-picker-option.active {
+            background: linear-gradient(135deg, rgba(38,79,236,0.95), rgba(255,94,201,0.60));
+            color: #ffffff;
+        }
+
         /* Responsive */
         @media (max-width: 900px) {
             .an-main-grid { grid-template-columns: 1fr; }
@@ -1607,11 +1701,20 @@
                 <!-- FILTER BAR -->
                 <div class="card" style="margin-bottom: 30px; padding: 20px;">
                     <div class="filter-header" style="display:flex; flex-wrap:wrap; gap:15px; align-items:center;">
-                        <!-- periodFilter visível — seletor de mês para Audit Log Explorer -->
-                        <select id="periodFilter" class="f-input" style="min-width:180px; padding:10px 14px;" onchange="loadAuditExplorerPage(1)">
+                        <!-- Alterado Patty - 11/05/2026
+                             Motivo: substituir select nativo visível por dropdown customizado.
+                             O select original fica oculto apenas como fonte de valor para a lógica existente. -->
+                        <div id="periodPicker" class="period-picker">
+                            <button type="button" id="periodPickerBtn" class="period-picker-btn" onclick="togglePeriodPicker_(event)">
+                                <span id="periodPickerLabel">Abril/2026</span>
+                                <span class="period-picker-arrow">⌄</span>
+                            </button>
+                            <div id="periodPickerMenu" class="period-picker-menu"></div>
+                        </div>
+
+                        <select id="periodFilter" class="f-input period-native-hidden" onchange="loadAuditExplorerPage(1)" aria-hidden="true" tabindex="-1">
                             <option value="">📅 Selecione o mês</option>
                             <optgroup label="2026">
-                                <option value="2026-05">Maio/2026</option>
                                 <option value="2026-04" selected>Abril/2026</option>
                                 <option value="2026-03">Março/2026</option>
                                 <option value="2026-02">Fevereiro/2026</option>
@@ -2114,7 +2217,7 @@
 
             <div style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius:14px;">
                 <table id="modalTable">
-                    <thead><tr><th>DATA</th><th title="Refere-se à forma como foi auditado: consolidado (CI+CA) ou individual.">TIPO</th><th id="modalAuditHeader">REGISTRO</th></tr></thead>
+                    <thead><tr><th>DATA</th><th title="Refere-se à forma como foi auditado: consolidado (CI+CA) ou individual.">TIPO</th><th>VIEWS</th><th id="modalAuditHeader">REGISTRO</th></tr></thead>
                     <tbody id="modalBody"></tbody>
                 </table>
             </div>
@@ -2303,6 +2406,7 @@
         function clearFilters() {
             document.getElementById('cpSearch').value = '';
             document.getElementById('periodFilter').value = '';
+            syncPeriodPickerFromSelect_();
             document.getElementById('typeFilter').value = '';
 
             const today = new Date().toISOString().split('T')[0];
@@ -2330,6 +2434,106 @@
             const t = String(toIso).split('-').map(Number);
             if (f.length < 3 || t.length < 3 || f.some(isNaN) || t.some(isNaN)) return 1;
             return ((t[0] - f[0]) * 12) + (t[1] - f[1]) + 1;
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // PERIOD PICKER CUSTOM — Audit Log Explorer
+        // Alterado Patty - 11/05/2026
+        // Motivo: substituir popup nativo branco por dropdown dark controlado.
+        // ═══════════════════════════════════════════════════════
+
+        function initCustomPeriodPicker_() {
+            const select = document.getElementById('periodFilter');
+            const menu = document.getElementById('periodPickerMenu');
+
+            if (!select || !menu) return;
+
+            menu.innerHTML = '';
+
+            Array.from(select.children).forEach(function(node) {
+                if (node.tagName === 'OPTGROUP') {
+                    const group = document.createElement('div');
+                    group.className = 'period-picker-group';
+                    group.textContent = node.label || '';
+                    menu.appendChild(group);
+
+                    Array.from(node.children).forEach(function(opt) {
+                        appendPeriodPickerOption_(opt);
+                    });
+                } else if (node.tagName === 'OPTION') {
+                    appendPeriodPickerOption_(node);
+                }
+            });
+
+            syncPeriodPickerFromSelect_();
+
+            if (!document._periodPickerOutsideBound) {
+                document._periodPickerOutsideBound = true;
+                document.addEventListener('click', function(e) {
+                    const picker = document.getElementById('periodPicker');
+                    if (picker && !picker.contains(e.target)) {
+                        picker.classList.remove('open');
+                    }
+                });
+            }
+        }
+
+        function appendPeriodPickerOption_(opt) {
+            const menu = document.getElementById('periodPickerMenu');
+            if (!menu || !opt) return;
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'period-picker-option';
+            btn.dataset.value = opt.value || '';
+            btn.textContent = opt.textContent || opt.label || opt.value || 'Selecionar mês';
+
+            btn.onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const select = document.getElementById('periodFilter');
+                const picker = document.getElementById('periodPicker');
+
+                if (select) select.value = btn.dataset.value || '';
+                if (picker) picker.classList.remove('open');
+
+                syncPeriodPickerFromSelect_();
+                loadAuditExplorerPage(1);
+            };
+
+            menu.appendChild(btn);
+        }
+
+        function togglePeriodPicker_(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            const picker = document.getElementById('periodPicker');
+            if (!picker) return;
+
+            picker.classList.toggle('open');
+        }
+
+        function syncPeriodPickerFromSelect_() {
+            const select = document.getElementById('periodFilter');
+            const label = document.getElementById('periodPickerLabel');
+            const menu = document.getElementById('periodPickerMenu');
+
+            if (!select || !label) return;
+
+            const selected = select.options[select.selectedIndex];
+            label.textContent = selected && selected.value
+                ? selected.textContent
+                : '📅 Selecione o mês';
+
+            if (menu) {
+                Array.from(menu.querySelectorAll('.period-picker-option')).forEach(function(btn) {
+                    btn.classList.toggle('active', String(btn.dataset.value || '') === String(select.value || ''));
+                });
+            }
         }
 
         // GERAR ONEPAGE DIRETO DA NUVEM
@@ -2539,6 +2743,11 @@
                      document.getElementById('opDateTo').value = isoToday;
                      // Histórico temporal: padrão Abril (último mês completo antes da migração 05/05)
                      document.getElementById('periodFilter').value = '2026-04';
+
+                     // Alterado Patty - 11/05/2026
+                     // Motivo: inicializar dropdown customizado do seletor de mês.
+                     initCustomPeriodPicker_();
+                     syncPeriodPickerFromSelect_();
 
                      const btn = document.getElementById('btnLP');
                      if (btn) btn.classList.add('ready');
@@ -3800,82 +4009,162 @@
         }
 
         // === MODAL ONEPAGE ===
+        // === MODAL ONEPAGE ===
+        // Alterado Patty - 11/05/2026
+        // Motivo: modal do CP não pode depender apenas da página atual do Explorer.
+        // Agora busca o CP no back pelo período selecionado e exibe mini lista de views/acessos.
         function openCpModal(cpName, skipRemoteFallback) {
-            const typ = document.getElementById('typeFilter').value;
-            const dFrom = document.getElementById('dateFrom').value;
-            const dTo = document.getElementById('dateTo').value;
+            const typ = document.getElementById('typeFilter')?.value || '';
+            const period = document.getElementById('periodFilter')?.value || '';
+            const cpCode = normalizeCodCpFront_(cpName) || normalizeCpSearchTermFront_(cpName);
 
-            // Emails administrativos — nunca devem aparecer no detalhe do CP
-            const ADMIN_EMAILS_MODAL = [
-                'patricia.wojciechowski@grupoboticario.com.br',
-                'opatriciakelly@gmail.com',
-                'opatricia.kelly@gmail.com'
-            ];
-            const cpItems = fullList.filter(i => {
-                if (i.n !== cpName && i.c !== cpName) return false;
-                // Filtra linha se o ator for um email administrativo (mesmo que venha do cache antigo)
-                if (i.e && isAdminAuditEmailFront_(i.e)) return false;
-                if (typ && i.t !== typ) return false;
-                if (dFrom || dTo) {
-                    const p = i.d.split('/');
-                    const iso = p[2] + '-' + p[1] + '-' + p[0];
-                    if (dFrom && iso < dFrom) return false;
-                    if (dTo && iso > dTo) return false;
-                }
-                return true;
-            });
-            
-            if (cpItems.length === 0) {
-                showToast('Resumo simbólico não está no recorte rápido da home. Para evidência completa, use o menu Comprovante PDF com o período desejado.', '🔎');
+            if (!skipRemoteFallback && period && cpCode) {
+                showToast(`Localizando acessos do CP ${cpCode} em ${period}...`, '🔎');
+
+                google.script.run
+                    .withSuccessHandler(function(res) {
+                        if (!res || res.success === false) {
+                            showToast(res && res.error ? res.error : 'Não foi possível carregar a mini lista do CP.', '⚠️');
+                            return openCpModal(cpName, true);
+                        }
+
+                        const items = Array.isArray(res.list) ? res.list : [];
+
+                        if (!items.length) {
+                            showToast('Nenhum acesso encontrado para este CP no mês selecionado.', '🔎');
+                            return;
+                        }
+
+                        renderCpMiniModal_(items, cpName, Number(res.total || items.length));
+                    })
+                    .withFailureHandler(function(err) {
+                        showToast('Falha ao carregar mini lista do CP: ' + err.message, '📡');
+                        openCpModal(cpName, true);
+                    })
+                    .api_getResumoExplorerPage({
+                        period: period,
+                        type: typ,
+                        term: cpCode,
+                        page: 1,
+                        pageSize: 100
+                    });
+
                 return;
             }
 
-            const cod = cpItems[0].c;
-            const nome = cpItems[0].n || cpName;
-            // Soma os valores auditados de cada registro (que podem ser 1 ou 2 dependendo do produto)
-            const totalAcessos = cpItems.reduce((acc, i) => acc + (i.v || 1), 0);
+            // Fallback local: usa apenas a página atual carregada.
+            const dFrom = document.getElementById('dateFrom')?.value || '';
+            const dTo = document.getElementById('dateTo')?.value || '';
 
-            // Alterado Patty - 10/05/2026: ordenar datas corretamente (ISO sort via brDateToIso)
-            const datas = [...new Set(cpItems.map(i => i.d))]
+            const cpItems = (Array.isArray(fullList) ? fullList : []).filter(i => {
+                if (!i) return false;
+
+                const sameCp =
+                    String(i.n || '') === String(cpName || '') ||
+                    String(i.c || '') === String(cpName || '') ||
+                    normalizeCodCpFront_(i.c) === normalizeCodCpFront_(cpName);
+
+                if (!sameCp) return false;
+                if (i.e && isAdminAuditEmailFront_(i.e)) return false;
+                if (typ && i.t !== typ) return false;
+
+                if (dFrom || dTo) {
+                    const iso = brDateToIso(i.d || '');
+                    if (dFrom && iso < dFrom) return false;
+                    if (dTo && iso > dTo) return false;
+                }
+
+                return true;
+            });
+
+            if (cpItems.length === 0) {
+                showToast('Resumo simbólico não está no recorte rápido da página atual. Use o filtro por CP ou o menu Comprovante PDF.', '🔎');
+                return;
+            }
+
+            renderCpMiniModal_(cpItems, cpName, cpItems.length);
+        }
+
+        // Alterado Patty - 11/05/2026
+        // Motivo: centralizar renderização da mini janela de acessos/views por CP.
+        function renderCpMiniModal_(items, cpName, totalServer) {
+            const cpItems = (Array.isArray(items) ? items : [])
+                .filter(i => i && !isAdminAuditEmailFront_(i.e))
+                .sort((a, b) => brDateToIso(b.d || '').localeCompare(brDateToIso(a.d || '')));
+
+            if (!cpItems.length) {
+                showToast('Nenhum acesso válido encontrado para este CP.', '🔎');
+                return;
+            }
+
+            const cod = cpItems[0].c || normalizeCodCpFront_(cpName) || cpName;
+            const nome = cpItems[0].n || cpName;
+
+            const totalAcessos = cpItems.reduce((acc, i) => acc + (Number(i.v || 1)), 0);
+
+            const datas = Array.from(new Set(cpItems.map(i => i.d).filter(Boolean)))
                 .sort((a, b) => brDateToIso(a).localeCompare(brDateToIso(b)));
 
             document.getElementById('modalNome').innerText = normCpName(nome) || cod;
             document.getElementById('modalCod').innerText = cod;
-            document.getElementById('modalTotal').innerText = totalAcessos.toLocaleString();
-            document.getElementById('modalDatas').innerText = datas.length;
-            // Renomeia label do modal para Views Totais
+            document.getElementById('modalTotal').innerText = totalAcessos.toLocaleString('pt-BR');
+            document.getElementById('modalDatas').innerText = datas.length.toLocaleString('pt-BR');
+
             const modalTotalLabel = document.getElementById('modalTotalLabel');
             if (modalTotalLabel) modalTotalLabel.innerText = 'Views Totais';
 
-            // Cabeçalho da coluna de auditoria
-            document.getElementById('modalAuditHeader').innerText = '🔒 REGISTRO AUDITADO';
+            const modalAuditHeader = document.getElementById('modalAuditHeader');
+            if (modalAuditHeader) modalAuditHeader.innerText = '🔒 REGISTRO AUDITADO';
 
-            // Tabela do modal
-            document.getElementById('modalBody').innerHTML = cpItems.map(i => `
-                <tr>
-                    <td style="color:var(--m); font-size:0.8em">${i.d}</td>
-                    <td><span class="badge-report">${i.t}</span></td>
-                    <td style="font-size:0.8em; color:var(--m); font-style:italic">${safeAuditEmailFront_(i.e) ? i.e : '—'}</td>
-                </tr>
-            `).join('');
+            document.getElementById('modalBody').innerHTML = cpItems.map(i => {
+                const views = Number(i.v || 1);
 
-            // Mini gráfico de tendência do CP
+                return `
+                    <tr>
+                        <td style="color:var(--m); font-size:0.8em">${i.d || '—'}</td>
+                        <td><span class="badge-report">${i.t || 'Acesso ao Drive'}</span></td>
+                        <td style="font-size:0.85em; color:#fff; font-weight:800; text-align:center;">${views.toLocaleString('pt-BR')}</td>
+                        <td style="font-size:0.8em; color:var(--m); font-style:italic">${safeAuditEmailFront_(i.e) ? maskEmail(i.e) : '—'}</td>
+                    </tr>
+                `;
+            }).join('');
+
             const trendMap = {};
-            cpItems.forEach(i => { trendMap[i.d] = (trendMap[i.d]||0) + (i.v || 1); });
+            cpItems.forEach(i => {
+                const d = i.d || '—';
+                trendMap[d] = (trendMap[d] || 0) + Number(i.v || 1);
+            });
 
-            // Alterado Patty - 10/05/2026: ordenar por data ISO para o gráfico sair cronológico
             const tLabs = Object.keys(trendMap)
                 .sort((a, b) => brDateToIso(a).localeCompare(brDateToIso(b)));
 
             const ctx = document.getElementById('modalChart').getContext('2d');
             if (modalChartInstance) modalChartInstance.destroy();
+
             modalChartInstance = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: tLabs.map(l => l.substring(0, 5)),
-                    datasets: [{ data: tLabs.map(l => trendMap[l]), backgroundColor: 'rgba(255,94,201,0.5)', borderColor: '#FF5EC9', borderWidth: 1, borderRadius: 4 }]
+                    datasets: [{
+                        data: tLabs.map(l => trendMap[l]),
+                        backgroundColor: 'rgba(255,94,201,0.5)',
+                        borderColor: '#FF5EC9',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }]
                 },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: { size: 9 }, color: '#94a3b8' }, grid: { display: false } }, y: { display: false } } }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: {
+                            ticks: { font: { size: 9 }, color: '#94a3b8' },
+                            grid: { display: false }
+                        },
+                        y: { display: false }
+                    }
+                }
             });
 
             document.getElementById('cpModal').classList.add('open');

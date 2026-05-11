@@ -1087,6 +1087,83 @@ function internal_processSheetsData_(filterParams) {
 // ==== MOTOR DE PERFORMANCE JSON (v5.9.7) ====
 const CACHE_FILE_NAME = 'sherlock_v59_snapshot.json';
 
+// ═══════════════════════════════════════════════════════════
+// MÉTRICAS OFICIAIS — CAMADA DE NEGÓCIO SHERLOCK
+// Alterado Patty - 10/05/2026
+// Motivo:
+// - O snapshot Python é a melhor fonte operacional rápida,
+//   mas o histórico 2025 do Drive não está completo.
+// - Para cards oficiais, preservar número histórico validado.
+// - Para 2026, usar snapshot com ajuste de paridade CI/CA.
+// ═══════════════════════════════════════════════════════════
+
+const SHERLOCK_OFFICIAL_2025_VIEWS = 56000;
+const SHERLOCK_OFFICIAL_CP_REPORTS = 378;
+const SHERLOCK_OFFICIAL_SEM_FVC    = 40;
+
+function sumTrendSplitParityByYear_(trendSplit, year) {
+  let ca = 0, ci = 0, outros = 0;
+  const keys = Object.keys(trendSplit || {});
+  for (let i = 0; i < keys.length; i++) {
+    const dateKey = String(keys[i] || '');
+    if (!dateKey.startsWith(String(year))) continue;
+    const item = trendSplit[dateKey] || {};
+    ca     += Number(item.ca)     || 0;
+    ci     += Number(item.ci)     || 0;
+    outros += Number(item.outros) || 0;
+  }
+  // Regra de negócio: CI e CA em paridade; "outros" mantém bruto.
+  return Math.max(ca, ci) * 2 + outros;
+}
+
+function applySherlockOfficialMetrics_(data) {
+  if (!data || !data.stats) return data;
+  const stats = data.stats;
+
+  const rawAudit = Number(stats.audit) || 0;
+  const raw2025  = Number(stats.viewsRaw2025  || stats.audit2025)  || 0;
+  const raw2026  = Number(stats.viewsRaw2026  || stats.audit2026)  || 0;
+
+  const parity2026    = sumTrendSplitParityByYear_(stats.trendSplit, '2026');
+  const official2025  = Math.max(raw2025, SHERLOCK_OFFICIAL_2025_VIEWS);
+  const official2026  = Math.max(raw2026, parity2026 || 0);
+
+  stats.auditRaw       = rawAudit;
+  stats.audit2025Raw   = raw2025;
+  stats.audit2026Raw   = raw2026;
+
+  stats.viewsOfficial2025 = official2025;
+  stats.viewsOfficial2026 = official2026;
+  stats.viewsOfficial     = official2025 + official2026;
+
+  // Compatibilidade com os cards atuais do front.
+  stats.audit2025 = official2025;
+  stats.audit2026 = official2026;
+  stats.audit     = official2025 + official2026;
+
+  stats.audit2026Parity    = parity2026;
+  stats.businessMetricMode = 'HYBRID_2025_MANUAL_2026_SNAPSHOT_PARITY';
+
+  stats.cpsRaw = Number(stats.cps) || 0;
+  stats.cps    = Math.max(stats.cpsRaw, SHERLOCK_OFFICIAL_CP_REPORTS);
+
+  stats.semFvcCount  = SHERLOCK_OFFICIAL_SEM_FVC;
+  stats.semFvcSource = 'FIXO_MANUAL_VALIDADO_APPS_SCRIPT';
+
+  // Evita leitura FVC/carteira na home.
+  stats.fvcOutsideCurrentCycle = stats.fvcOutsideCurrentCycle || {
+    success: true,
+    sourceMethod: 'SNAPSHOT_ONLY_MANUAL',
+    totalCpFvc: 0,
+    totalCpForaFvc: SHERLOCK_OFFICIAL_SEM_FVC,
+    cpForaFvc: [],
+    cpForaFvcTruncado: false,
+    error: ''
+  };
+
+  return data;
+}
+
 function normalizeFilterParams_(filterParams) {
   const p = Object.assign({}, filterParams || {});
   const period = String(p.period || '').trim();
@@ -1335,7 +1412,11 @@ function getHomeSnapshotFast() {
 
     const file = files.next();
     const content = file.getBlob().getDataAsString('UTF-8');
-    const data = JSON.parse(content);
+    let data = JSON.parse(content);
+
+    // Aplica camada oficial de negócio sem reprocessar JSON/Sheets.
+    // 2025 preserva histórico validado. 2026 usa snapshot + paridade CI/CA.
+    data = applySherlockOfficialMetrics_(data);
 
     const AUDIT_ALLOWED_EMAILS = [
       'patricia.wojciechowski@grupoboticario.com.br',
@@ -1346,16 +1427,8 @@ function getHomeSnapshotFast() {
     data.canAudit = AUDIT_ALLOWED_EMAILS.includes(activeUser);
 
     if (data.stats) {
-      // Alterado Patty 10/05/2026: não abrir planilha FVC na home — usa semFvcCount do snapshot gerado pelo Python
-      data.stats.fvcOutsideCurrentCycle = data.stats.fvcOutsideCurrentCycle || {
-        success: true,
-        sourceMethod: 'SNAPSHOT_ONLY',
-        totalCpFvc: 0,
-        totalCpForaFvc: Number(data.stats.semFvcCount) || 0,
-        cpForaFvc: [],
-        cpForaFvcTruncado: false,
-        error: ''
-      };
+      // Não recalcular FVC/carteira na home.
+      // applySherlockOfficialMetrics_ já injeta fvcOutsideCurrentCycle leve.
     }
 
     // A home não precisa receber lista gigante
@@ -1499,32 +1572,26 @@ function sumTrendRange_(trendMap, dateFrom, dateTo) {
 function getStrategicAccessView() {
   try {
     const snapshot = getHomeSnapshotFast();
-
     if (!snapshot || snapshot.success === false || snapshot.error) {
-      return {
-        success: false,
-        error: snapshot && snapshot.error ? snapshot.error : 'Snapshot indisponível.'
-      };
+      return { success: false, error: snapshot && snapshot.error ? snapshot.error : 'Snapshot indisponível.' };
     }
-
-    const trend = snapshot.stats && snapshot.stats.trend ? snapshot.stats.trend : {};
-
-    const access2025 = sumTrendRange_(trend, '2025-01-01', '2025-12-31');
-    const access2026FirstTwoHalfMonths = sumTrendRange_(trend, '2026-01-01', '2026-03-15');
-
+    const stats = snapshot.stats || {};
+    const trend = stats.trend || {};
+    const access2025 = Number(stats.audit2025 || stats.viewsOfficial2025) || sumTrendRange_(trend, '2025-01-01', '2025-12-31');
+    const access2026 = Number(stats.audit2026 || stats.viewsOfficial2026) || sumTrendRange_(trend, '2026-01-01', '2026-12-31');
     return {
       success: true,
       ranges: {
         y2025: access2025,
-        y2026FirstTwoHalfMonths: access2026FirstTwoHalfMonths,
-        y2026Accumulated: access2026FirstTwoHalfMonths
+        y2026FirstTwoHalfMonths: access2026,
+        y2026Accumulated: access2026
       },
       labels: {
-        y2025: '2025 fechado - snapshot CI+CA',
-        y2026FirstTwoHalfMonths: '2026 até 15/03 - snapshot CI+CA',
-        y2026Accumulated: '2026 acumulado - snapshot CI+CA'
+        y2025: '2025 oficial - histórico validado',
+        y2026FirstTwoHalfMonths: '2026 snapshot + paridade CI/CA',
+        y2026Accumulated: '2026 acumulado oficial'
       },
-      sourceMethod: 'SNAPSHOT_FAST_ONLY'
+      sourceMethod: 'SNAPSHOT_FAST_ONLY_OFFICIAL'
     };
   } catch (e) {
     return { success: false, error: 'Erro ao calcular visão estratégica via snapshot: ' + e.toString() };
@@ -1536,30 +1603,18 @@ function getStrategicAccessView() {
 function getYearlyLineAccessSummary() {
   try {
     const snapshot = getHomeSnapshotFast();
-
     if (!snapshot || snapshot.success === false || snapshot.error) {
-      return {
-        success: false,
-        error: snapshot && snapshot.error ? snapshot.error : 'Snapshot indisponível.'
-      };
+      return { success: false, error: snapshot && snapshot.error ? snapshot.error : 'Snapshot indisponível.' };
     }
-
-    const trend = snapshot.stats && snapshot.stats.trend ? snapshot.stats.trend : {};
-
-    const access2025 = sumTrendRange_(trend, '2025-01-01', '2025-12-31');
-    const access2026 = sumTrendRange_(trend, '2026-01-01', '2026-12-31');
-
+    const stats = snapshot.stats || {};
+    const trend = stats.trend || {};
+    const access2025 = Number(stats.audit2025 || stats.viewsOfficial2025) || sumTrendRange_(trend, '2025-01-01', '2025-12-31');
+    const access2026 = Number(stats.audit2026 || stats.viewsOfficial2026) || sumTrendRange_(trend, '2026-01-01', '2026-12-31');
     return {
       success: true,
-      ranges: {
-        y2025: access2025,
-        y2026: access2026
-      },
-      labels: {
-        y2025: '2025 via snapshot',
-        y2026: '2026 via snapshot'
-      },
-      sourceMethod: 'SNAPSHOT_FAST_ONLY'
+      ranges: { y2025: access2025, y2026: access2026 },
+      labels: { y2025: '2025 oficial - histórico validado', y2026: '2026 snapshot + paridade CI/CA' },
+      sourceMethod: 'SNAPSHOT_FAST_ONLY_OFFICIAL'
     };
   } catch (e) {
     return { success: false, error: 'Erro ao calcular resumo anual via snapshot: ' + e.toString() };
@@ -1585,25 +1640,20 @@ function isSystemActorEmail_(email) {
 function getFranchiseBigNumber2026() {
   try {
     const snapshot = getHomeSnapshotFast();
-
     if (!snapshot || snapshot.success === false || snapshot.error) {
-      return {
-        success: false,
-        error: snapshot && snapshot.error ? snapshot.error : 'Snapshot indisponível.'
-      };
+      return { success: false, error: snapshot && snapshot.error ? snapshot.error : 'Snapshot indisponível.' };
     }
-
-    const trend = snapshot.stats && snapshot.stats.trend ? snapshot.stats.trend : {};
-    const total2026 = sumTrendRange_(trend, '2026-01-01', '2026-12-31');
-
+    const stats = snapshot.stats || {};
+    const trend = stats.trend || {};
+    const total2026 = Number(stats.audit2026 || stats.viewsOfficial2026) || sumTrendRange_(trend, '2026-01-01', '2026-12-31');
     return {
       success: true,
       year: 2026,
       baseLines: total2026,
       total: total2026,
       multiplier: 1,
-      label: 'Acessos 2026 via snapshot rápido',
-      sourceMethod: 'SNAPSHOT_FAST_ONLY'
+      label: 'Acessos 2026 via snapshot + paridade CI/CA',
+      sourceMethod: 'SNAPSHOT_FAST_ONLY_OFFICIAL'
     };
   } catch (e) {
     return { success: false, error: 'Erro ao calcular Big Number 2026 via snapshot: ' + e.toString() };

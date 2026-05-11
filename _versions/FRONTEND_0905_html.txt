@@ -2774,9 +2774,9 @@
             if (topCps) topCps.innerText = toSafeNumber(stats && stats.cps).toLocaleString('pt-BR');
 
             // Alterado Patty - 10/05/2026: cards de views por ano
-            // views2026 usa viewsPotential2026 que ja calcula 4 emails/CP a partir de maio
+            // views2026 usa dado auditado (carga ate 30/04/2026); viewsPotential so como fallback
             const views2025 = Number(stats && (stats.viewsOfficial2025 || stats.audit2025 || stats.viewsRaw2025) || 0);
-            const views2026 = Number(stats && (stats.viewsPotential2026 || stats.viewsAudited2026 || stats.viewsOfficial2026 || stats.audit2026 || stats.viewsRaw2026) || 0);
+            const views2026 = Number(stats && (stats.viewsAudited2026 || stats.audit2026 || stats.viewsRaw2026 || stats.viewsPotential2026) || 0);
             setTextSafe('welcomeViews2025', views2025.toLocaleString('pt-BR'));
             setTextSafe('welcomeViews2026', views2026.toLocaleString('pt-BR'));
 

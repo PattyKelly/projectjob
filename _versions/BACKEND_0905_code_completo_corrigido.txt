@@ -1381,6 +1381,329 @@ function hasActiveUserFilters_(filterParams) {
   );
 }
 
+/************************************************************
+ * SHERLOCK — LEITURA OFICIAL DOS ARQUIVOS RESUMO
+ * Patty — 10/05/2026
+ * Motivo: cards 2025/2026 estavam usando snapshot/unique (194 views).
+ * Correção: ler resumo_2025 e resumo_2026 diretamente das Sheets.
+ ************************************************************/
+
+var SH_RESUMO_2025_SS_ID  = '1xsP5ggBCmt5YjUlGocOs45Zic4JFdGBrz85wVs-_VOQ';
+var SH_RESUMO_2026_SS_ID  = '1UK0mI2-Jc-qSChSuf0BoZ7Owvl-GSorkS9bJsQH959w';
+var SH_RESUMO_2025_SHEET  = 'resumo_2025';
+var SH_RESUMO_2026_SHEET  = 'resumo_2026';
+var SH_RESUMO_CHUNK_SIZE  = 10000;   // linhas por leitura para não estourar memória
+var SH_RESUMO_MAX_LIST    = 25000;   // 500 páginas × 50 linhas para o Explorer
+
+// Padrões admin/sistema para excluir das views de cliente
+var SH_RESUMO_ADMIN_PATTERNS = [
+  'patricia.wojciechowski@grupoboticario.com.br',
+  'opatriciakelly@gmail.com',
+  'opatricia.kelly@gmail.com',
+  'wojciechowski',
+  'redeboticario.com.br'
+];
+
+function SH_isResumoAdminEmail_(email) {
+  var e = String(email || '').toLowerCase().trim();
+  if (!e) return true; // sem e-mail = sistema
+  return SH_RESUMO_ADMIN_PATTERNS.some(function(p) {
+    return e.indexOf(p.toLowerCase()) >= 0;
+  });
+}
+
+function SH_normalizeTipoReport_(tipo) {
+  var t = String(tipo || '').trim().toUpperCase();
+  if (t === 'CI') return 'Report CI';
+  if (t === 'CA') return 'Report CA';
+  if (t === 'REPORT') return 'Report';
+  if (t === 'OUTRO' || t === 'OUTROS') return 'Acesso ao Drive';
+  if (t === 'ACESSO AO DRIVE') return 'Acesso ao Drive';
+  return String(tipo || 'Report').trim() || 'Report';
+}
+
+function SH_parseResumoDate_(value) {
+  if (!value) return null;
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+    return value;
+  }
+  var txt = String(value).trim();
+  var iso = txt.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+  var br = txt.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) return new Date(Number(br[3]), Number(br[2]) - 1, Number(br[1]));
+  return null;
+}
+
+function SH_buildResumoIdx_(headers) {
+  var norm = {};
+  headers.forEach(function(h, i) {
+    var k = String(h || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]+/gi, ' ').trim().toUpperCase();
+    norm[k] = i;
+  });
+  function pick(names) {
+    for (var ni = 0; ni < names.length; ni++) {
+      var k = names[ni].toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+      if (norm[k] !== undefined) return norm[k];
+    }
+    return -1;
+  }
+  return {
+    tipo:        pick(['TIPO DO REPORT', 'TIPO DO RE', 'TIPO']),
+    codCp:       pick(['COD DO CP', 'COD CP', 'CODIGO CP', 'COD']),
+    nomeCp:      pick(['NOME DO CP', 'NOME CP', 'NOME']),
+    data:        pick(['DATA', 'DT']),
+    responsavel: pick(['RESPONSAVEL ATOR', 'RESPONSAVEL', 'RESPONSÁVEL']),
+    quantidade:  pick(['QUANTIDADE', 'QTD'])
+  };
+}
+
+function SH_openResumoSheet_(ssId, sheetName) {
+  var ss = SpreadsheetApp.openById(ssId);
+  var sh = ss.getSheetByName(sheetName);
+  if (!sh) {
+    var sheets = ss.getSheets();
+    if (sheets.length > 0) sh = sheets[0];
+  }
+  return sh;
+}
+
+/**
+ * Lê uma planilha resumo inteira em chunks e retorna stats + list capped.
+ * O total (views) conta TODAS as linhas válidas, mesmo que list esteja capped.
+ */
+function SH_readResumoFull_(ssId, sheetName, canAudit, payload) {
+  var empty = { views: 0, dispo: 0, list: [], trend: {}, types: {}, cpAgg: {}, cpDistinct: {}, totalRows: 0 };
+  var sh = SH_openResumoSheet_(ssId, sheetName);
+  if (!sh) return empty;
+
+  var lastRow = sh.getLastRow();
+  var lastCol = Math.min(sh.getLastColumn(), 7);
+  if (lastRow < 2) return empty;
+
+  var headers = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+  var idx = SH_buildResumoIdx_(headers);
+
+  var filterPeriod = String((payload && payload.period)   || '').trim();
+  var filterFrom   = String((payload && payload.dateFrom) || '').trim();
+  var filterTo     = String((payload && payload.dateTo)   || '').trim();
+  var filterTerm   = String((payload && payload.term)     || '').toLowerCase().trim();
+
+  var out = { views: 0, dispo: 0, list: [], trend: {}, types: {}, cpAgg: {}, cpDistinct: {}, totalRows: 0 };
+  var tz  = Session.getScriptTimeZone();
+
+  var startRow = 2;
+  while (startRow <= lastRow) {
+    var rowsToRead = Math.min(SH_RESUMO_CHUNK_SIZE, lastRow - startRow + 1);
+    var values = sh.getRange(startRow, 1, rowsToRead, lastCol).getValues();
+
+    for (var ri = 0; ri < values.length; ri++) {
+      var row = values[ri];
+
+      // COD CP obrigatório
+      var codCpRaw = idx.codCp >= 0 ? String(row[idx.codCp] || '').trim() : '';
+      var codCp    = codCpRaw.replace(/\D/g, '') || codCpRaw;
+      if (!codCp) continue;
+
+      // DATA obrigatória
+      var dataRaw = idx.data >= 0 ? row[idx.data] : '';
+      var dateObj = SH_parseResumoDate_(dataRaw);
+      if (!dateObj) continue;
+
+      var isoDate  = Utilities.formatDate(dateObj, tz, 'yyyy-MM-dd');
+      var dispDate = Utilities.formatDate(dateObj, tz, 'dd/MM/yyyy');
+
+      // Filtros de período/data
+      if (filterPeriod && isoDate.substring(0, 7) !== filterPeriod) continue;
+      if (filterFrom   && isoDate < filterFrom) continue;
+      if (filterTo     && isoDate > filterTo)   continue;
+
+      var emailRaw = idx.responsavel >= 0 ? String(row[idx.responsavel] || '').trim().toLowerCase() : '';
+      var isAdmin  = SH_isResumoAdminEmail_(emailRaw);
+      var nomeCpRaw = idx.nomeCp >= 0 ? String(row[idx.nomeCp] || '').trim() : '';
+      var nomeCp    = SH_normalizeCpName_(nomeCpRaw);
+      var tipoRaw   = idx.tipo >= 0 ? String(row[idx.tipo] || '').trim() : '';
+      var tipo      = SH_normalizeTipoReport_(tipoRaw);
+      var qtdRaw    = idx.quantidade >= 0 ? Number(row[idx.quantidade]) : 1;
+      var qtd       = (Number.isFinite(qtdRaw) && qtdRaw > 0) ? qtdRaw : 1;
+
+      if (isAdmin) {
+        out.dispo += qtd;
+        continue;
+      }
+
+      // Filtro de termo (cod, nome, e-mail)
+      if (filterTerm) {
+        var termDigits = filterTerm.replace(/\D/g, '');
+        var match = codCp.toLowerCase().includes(filterTerm)
+          || nomeCp.toLowerCase().includes(filterTerm)
+          || emailRaw.includes(filterTerm)
+          || (termDigits && codCp.includes(termDigits));
+        if (!match) continue;
+      }
+
+      out.views += qtd;
+      out.totalRows += 1;
+      out.trend[isoDate]   = (out.trend[isoDate]  || 0) + qtd;
+      out.types[tipo]      = (out.types[tipo]      || 0) + qtd;
+      out.cpDistinct[codCp] = true;
+
+      if (!out.cpAgg[codCp]) out.cpAgg[codCp] = { cod: codCp, name: nomeCp, val: 0 };
+      out.cpAgg[codCp].val += qtd;
+
+      if (out.list.length < SH_RESUMO_MAX_LIST) {
+        out.list.push({
+          d: dispDate,
+          t: tipo,
+          c: codCp,
+          n: nomeCp,
+          e: canAudit ? SH_maskEmailForAudit_(emailRaw) : '',
+          q: qtd
+        });
+      }
+    }
+
+    startRow += rowsToRead;
+  }
+
+  return out;
+}
+
+/**
+ * Ponto de entrada para o Dashboard — usa os arquivos resumo oficiais.
+ * Chamado pelo front em loadHeavyDashboard e fetchAuditTotalByRange.
+ */
+function getResumoAuditData(payload) {
+  payload = payload || {};
+  var canAudit = canCurrentUserAudit_();
+
+  var r2025 = SH_readResumoFull_(SH_RESUMO_2025_SS_ID, SH_RESUMO_2025_SHEET, canAudit, payload);
+  var r2026 = SH_readResumoFull_(SH_RESUMO_2026_SS_ID, SH_RESUMO_2026_SHEET, canAudit, payload);
+
+  // Merge list: 2026 primeiro (mais recente), depois 2025
+  var allList = r2026.list.concat(r2025.list).slice(0, SH_RESUMO_MAX_LIST);
+
+  // Merge ranking
+  var cpAggAll = {};
+  [r2025.cpAgg, r2026.cpAgg].forEach(function(agg) {
+    Object.keys(agg).forEach(function(k) {
+      if (!cpAggAll[k]) cpAggAll[k] = { cod: agg[k].cod, name: agg[k].name, val: 0 };
+      cpAggAll[k].val += agg[k].val;
+    });
+  });
+  var ranking = Object.values(cpAggAll).sort(function(a, b) { return b.val - a.val; });
+
+  var trendAll = {};
+  [r2025.trend, r2026.trend].forEach(function(t) {
+    Object.keys(t).forEach(function(k) { trendAll[k] = (trendAll[k] || 0) + t[k]; });
+  });
+  var typesAll = {};
+  [r2025.types, r2026.types].forEach(function(t) {
+    Object.keys(t).forEach(function(k) { typesAll[k] = (typesAll[k] || 0) + t[k]; });
+  });
+  var cpsAll = Object.assign({}, r2025.cpDistinct, r2026.cpDistinct);
+
+  return {
+    success: true,
+    canAudit: canAudit,
+    sourceMethod: 'SHEETS_RESUMO_OFICIAL',
+    list: allList,
+    stats: {
+      audit:        r2025.views + r2026.views,
+      audit2025:    r2025.views,
+      audit2026:    r2026.views,
+      views2025:    r2025.views,
+      views2026:    r2026.views,
+      viewsRaw2025: r2025.views,
+      viewsRaw2026: r2026.views,
+      dispo:        r2025.dispo  + r2026.dispo,
+      cps:          Object.keys(cpsAll).length,
+      cps2025:      Object.keys(r2025.cpDistinct).length,
+      cps2026:      Object.keys(r2026.cpDistinct).length,
+      trend:        trendAll,
+      types:        typesAll,
+      top10:        ranking.slice(0, 10),
+      bottom10:     ranking.slice().sort(function(a, b) { return a.val - b.val; }).slice(0, 10),
+      suggestions:  ranking.map(function(x) { return x.cod + ' - ' + x.name; }),
+      listMeta: {
+        pageSize:            50,
+        maxPages:            500,
+        totalRowsAvailable:  r2025.totalRows + r2026.totalRows,
+        capped:              (r2025.totalRows + r2026.totalRows) > SH_RESUMO_MAX_LIST
+      }
+    }
+  };
+}
+
+/**
+ * Explorer paginado direto dos arquivos resumo.
+ * Substitui api_getAuditExplorerPage para trazer dados reais das Sheets resumo.
+ * Limite: 500 páginas máx.
+ */
+function api_getResumoExplorerPage(params) {
+  params = params || {};
+  var canAudit = canCurrentUserAudit_();
+
+  var pageSize = Math.min(Math.max(10, Number(params.pageSize || 50)), 100);
+  var page     = Math.max(1, Number(params.page || 1));
+  var period   = String(params.period   || '').trim();
+  var term     = String(params.term     || '').trim();
+  var dateFrom = String(params.dateFrom || '').trim();
+  var dateTo   = String(params.dateTo   || '').trim();
+
+  // Determina fonte(s) pelo ano do período
+  var sources = [];
+  var yearSrc = (period || dateFrom || '').match(/^(\d{4})/);
+  var year    = yearSrc ? Number(yearSrc[1]) : 0;
+  if (year === 2025) {
+    sources = [{ ssId: SH_RESUMO_2025_SS_ID, sheet: SH_RESUMO_2025_SHEET }];
+  } else if (year === 2026) {
+    sources = [{ ssId: SH_RESUMO_2026_SS_ID, sheet: SH_RESUMO_2026_SHEET }];
+  } else {
+    // sem filtro de ano: lê ambas (2026 primeiro)
+    sources = [
+      { ssId: SH_RESUMO_2026_SS_ID, sheet: SH_RESUMO_2026_SHEET },
+      { ssId: SH_RESUMO_2025_SS_ID, sheet: SH_RESUMO_2025_SHEET }
+    ];
+  }
+
+  var payload  = { period: period, dateFrom: dateFrom, dateTo: dateTo, term: term };
+  var allItems = [];
+
+  sources.forEach(function(src) {
+    var r = SH_readResumoFull_(src.ssId, src.sheet, canAudit, payload);
+    allItems = allItems.concat(r.list);
+  });
+
+  // Sort: mais recente primeiro
+  allItems.sort(function(a, b) {
+    var toIso = function(d) {
+      if (!d) return '';
+      var p = String(d).split('/');
+      return p.length === 3 ? p[2] + '-' + p[1] + '-' + p[0] : String(d);
+    };
+    return toIso(b.d).localeCompare(toIso(a.d));
+  });
+
+  var total      = allItems.length;
+  var maxPages   = 500;
+  var totalPages = Math.min(maxPages, Math.max(1, Math.ceil(total / pageSize)));
+  page           = Math.min(page, totalPages);
+  var start      = (page - 1) * pageSize;
+  var pageItems  = allItems.slice(start, start + pageSize);
+
+  return {
+    success:    true,
+    period:     period || dateFrom || 'todos',
+    page:       page,
+    pageSize:   pageSize,
+    total:      total,
+    totalPages: totalPages,
+    canAudit:   canAudit,
+    list:       pageItems
+  };
+}
+
 /**
  * Ponto de entrada otimizado para o Dashboard.
  * Tenta ler o JSON do Drive (ms) antes de processar o Sheets (minutos).

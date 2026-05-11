@@ -2094,6 +2094,7 @@
         let topRankAll = [];
         let bottomRankAll = [];
         const TABLE_PAGE_SIZE = 50;
+        const MAX_TABLE_PAGES = 500;        // limite Explorer: 500 págs × 50 = 25K linhas
         const RANK_PAGE_SIZE = 5;
         let IS_TECH_ADMIN = false;
 
@@ -2613,7 +2614,8 @@
             }).withFailureHandler(err => {
                 hideLoading();
                 showToast("Falha de conexão: " + err.message, '📡');
-            }).getConsolidatedData(requestPayload);
+            // Alterado Patty 10/05/2026: getResumoAuditData lê resumo_2025/resumo_2026 reais
+            }).getResumoAuditData(requestPayload);
         }
 
         /** Exibe aviso customizado premium no topo da tela */
@@ -2836,10 +2838,16 @@
 
         function renderData() {
             currentTablePage = 1;
-            const initialTotal = getAuditViewTotal();
+
+            // Alterado Patty 10/05/2026: bigTotal/k1 usam soma real dos resumos (não getAuditViewTotal)
+            const views2025raw = toSafeNumber(stats && (stats.views2025 || stats.viewsRaw2025 || stats.audit2025));
+            const views2026raw = toSafeNumber(stats && (stats.views2026 || stats.viewsRaw2026 || stats.audit2026));
+            const resumoTotal  = views2025raw + views2026raw;
+            // Fallback para snapshot caso ainda não tenha sido carregado via getResumoAuditData
+            const initialTotal = resumoTotal > 0 ? resumoTotal : getAuditViewTotal();
 
             setLocalizedNumber('bigTotal', initialTotal);
-            setLocalizedNumber('k1', initialTotal);
+            setLocalizedNumber('k1', views2026raw || initialTotal);
             setLocalizedNumber('k2', toSafeNumber(stats && stats.cps));
             setLocalizedNumber('k3', toSafeNumber(stats && stats.dispo));
             const topAudit = document.getElementById('welcomeAuditTotal');
@@ -2849,15 +2857,14 @@
             const topCps = document.getElementById('welcomeCpTotal');
             if (topCps) topCps.innerText = toSafeNumber(stats && stats.cps).toLocaleString('pt-BR');
 
-            // Alterado Patty - 10/05/2026: cards de views
-            // 1) Views 2025 (Histórico) | 2) Views Registradas até o Momento | 3) Views após ajuste campo e-mail
+            // Alterado Patty 10/05/2026: cards views — usa os totais já calculados acima via resumos
             function fmtKViews(v) {
                 return v >= 1000
                     ? Math.round(v / 1000).toLocaleString('pt-BR') + 'K Views'
                     : v.toLocaleString('pt-BR') + ' Views';
             }
-            const views2025 = Number(stats && (stats.viewsOfficial2025 || stats.audit2025 || stats.viewsRaw2025) || 0) || 56000;
-            const views2026 = Number(stats && (stats.viewsAudited2026 || stats.audit2026 || stats.viewsRaw2026) || 0);
+            const views2025 = views2025raw;
+            const views2026 = views2026raw;
             const viewsEmailAdj = Number(stats && (
                 stats.viewsAfterEmailAdjustmentFromMay ||
                 (stats.viewsPotential2026Details && stats.viewsPotential2026Details.totalFromMay)
@@ -3012,7 +3019,8 @@
                 .withFailureHandler(err => {
                     onError(err && err.message ? err.message : String(err || 'Erro desconhecido'));
                 })
-                .getConsolidatedData({ dateFrom, dateTo });
+                // Alterado Patty 10/05/2026: usa resumo oficial para faixa de datas
+                .getResumoAuditData({ dateFrom, dateTo });
         }
 
         function ensureBigNumbersFromDirectRanges() {
@@ -3179,7 +3187,8 @@
                 .withFailureHandler(err => {
                     showToast('Falha ao carregar histórico: ' + err.message, '📡');
                 })
-                .api_getAuditExplorerPage({
+                // Alterado Patty 10/05/2026: Explorer usa resumo oficial
+                .api_getResumoExplorerPage({
                     period,
                     type,
                     term,
@@ -3217,9 +3226,10 @@
                 ? Number(auditExplorerMeta.total || 0)
                 : items.length;
 
-            const totalPages = isServerMode
+            // Alterado Patty 10/05/2026: cap de 500 páginas no Explorer
+            const totalPages = Math.min(MAX_TABLE_PAGES, isServerMode
                 ? Math.max(1, Number(auditExplorerMeta.totalPages || 1))
-                : Math.max(1, Math.ceil(totalItems / TABLE_PAGE_SIZE));
+                : Math.max(1, Math.ceil(totalItems / TABLE_PAGE_SIZE)));
 
             currentTablePage = Math.min(Math.max(currentTablePage, 1), totalPages);
 

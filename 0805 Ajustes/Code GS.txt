@@ -2685,6 +2685,14 @@
             if (!match) return '';
             return String(match[0]).replace(/^0+(?=\d)/, '');
         }
+
+        // Alterado Patty - 10/05/2026
+        // Converte data BR (DD/MM/AAAA) para ISO (AAAA-MM-DD) para ordenação correta
+        function brDateToIso(value) {
+            const p = String(value || '').split('/');
+            if (p.length !== 3) return '';
+            return `${p[2]}-${p[1]}-${p[0]}`;
+        }
         function normalizeCpSearchTermFront_(value) {
             const raw = String(value || '').trim();
             const cod = normalizeCodCpFront_(raw);
@@ -3635,7 +3643,10 @@
             const nome = cpItems[0].n || cpName;
             // Soma os valores auditados de cada registro (que podem ser 1 ou 2 dependendo do produto)
             const totalAcessos = cpItems.reduce((acc, i) => acc + (i.v || 1), 0);
-            const datas = [...new Set(cpItems.map(i => i.d))].sort();
+
+            // Alterado Patty - 10/05/2026: ordenar datas corretamente (ISO sort via brDateToIso)
+            const datas = [...new Set(cpItems.map(i => i.d))]
+                .sort((a, b) => brDateToIso(a).localeCompare(brDateToIso(b)));
 
             document.getElementById('modalNome').innerText = normCpName(nome) || cod;
             document.getElementById('modalCod').innerText = cod;
@@ -3660,12 +3671,19 @@
             // Mini gráfico de tendência do CP
             const trendMap = {};
             cpItems.forEach(i => { trendMap[i.d] = (trendMap[i.d]||0) + (i.v || 1); });
-            const tLabs = Object.keys(trendMap).sort();
+
+            // Alterado Patty - 10/05/2026: ordenar por data ISO para o gráfico sair cronológico
+            const tLabs = Object.keys(trendMap)
+                .sort((a, b) => brDateToIso(a).localeCompare(brDateToIso(b)));
+
             const ctx = document.getElementById('modalChart').getContext('2d');
             if (modalChartInstance) modalChartInstance.destroy();
             modalChartInstance = new Chart(ctx, {
                 type: 'bar',
-                data: { labels: tLabs.map(l => l.split('-').reverse().slice(0,2).join('/')), datasets: [{ data: tLabs.map(l => trendMap[l]), backgroundColor: 'rgba(255,94,201,0.5)', borderColor: '#FF5EC9', borderWidth: 1, borderRadius: 4 }] },
+                data: {
+                    labels: tLabs.map(l => l.substring(0, 5)),
+                    datasets: [{ data: tLabs.map(l => trendMap[l]), backgroundColor: 'rgba(255,94,201,0.5)', borderColor: '#FF5EC9', borderWidth: 1, borderRadius: 4 }]
+                },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: { size: 9 }, color: '#94a3b8' }, grid: { display: false } }, y: { display: false } } }
             });
 

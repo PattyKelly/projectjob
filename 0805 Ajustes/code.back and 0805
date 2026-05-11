@@ -1983,9 +1983,11 @@ function api_getAuditExplorerPage(params) {
       const nomeRaw = String(row['NOME DO CP'] || '').trim();
       const nome    = normalizeCpNameForDisplay_(nomeRaw);
       const ator    = String(getAuditActorRawFromRow_(row) || '').trim();
-      const dCtx    = getNativeDateContext(row['DATA'] || '');
-      const dateKey = dCtx ? dCtx.k : '';
-      const fDate   = dCtx ? dCtx.f : String(row['DATA'] || '');
+      // Alterado Patty - 10/05/2026: usar SH_getAccessDateBR_ para data real do acesso
+      const dataBREx = SH_getAccessDateBR_(row);
+      if (!dataBREx) continue;
+      const dateKey = SH_brDateToIso_(dataBREx);
+      const fDate   = dataBREx;
 
       if (type && tipo !== type) continue;
       // Alterado Patty - 10/05/2026: ocultar registros de ruído sem CP real no Explorer
@@ -2458,30 +2460,125 @@ function SH_getFirstValueByAliases_(row, aliases) {
   return '';
 }
 
+// Alterado Patty - 10/05/2026
+// Leitura com NFD normalização das chaves — resolve qualquer variação de acentuação
+// nos cabeçalhos dos JSONs sem precisar listar todos os encodings possíveis.
+function SH_normKey_(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
+}
+
+function SH_getValueByAliases_(row, aliases) {
+  if (!row || typeof row !== 'object') return '';
+  var keyMap = {};
+  Object.keys(row).forEach(function(k) {
+    keyMap[SH_normKey_(k)] = k;
+  });
+  for (var i = 0; i < aliases.length; i++) {
+    var normalizedAlias = SH_normKey_(aliases[i]);
+    var realKey = keyMap[normalizedAlias];
+    if (
+      realKey &&
+      row[realKey] !== undefined &&
+      row[realKey] !== null &&
+      String(row[realKey]).trim() !== ''
+    ) {
+      return row[realKey];
+    }
+  }
+  return '';
+}
+
+function SH_parseDate_(value) {
+  if (!value) return null;
+  if (value instanceof Date && !isNaN(value.getTime())) return value;
+  var s = String(value).trim();
+  if (!s) return null;
+  // YYYY-MM-DD
+  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  // DD/MM/YYYY ou DD-MM-YYYY
+  m = s.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
+  if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+  // Serial planilha
+  if (/^\d+(\.\d+)?$/.test(s)) {
+    var serial = Number(s);
+    if (serial > 20000 && serial < 70000) {
+      return new Date(Math.round((serial - 25569) * 86400 * 1000));
+    }
+  }
+  return null;
+}
+
+function SH_formatDateBR_(date) {
+  if (!date || !(date instanceof Date) || isNaN(date.getTime())) return '';
+  try {
+    return Utilities.formatDate(date, Session.getScriptTimeZone(), 'dd/MM/yyyy');
+  } catch(e) {
+    var d = date.getDate(), mo = date.getMonth()+1, yr = date.getFullYear();
+    return (d<10?'0':'')+d+'/'+(mo<10?'0':'')+mo+'/'+yr;
+  }
+}
+
+function SH_getAccessDateBR_(row) {
+  var rawDate = SH_getValueByAliases_(row, [
+    'DATA DO ACESSO',
+    'DATA ACESSO',
+    'DATA/HORA DO ACESSO',
+    'DATA HORA DO ACESSO',
+    'DATA EVENTO',
+    'DT ACESSO',
+    'DT HR ACESSO',
+    'EVENT TIME',
+    'TIMESTAMP',
+    'DATA',
+    'DATE'
+  ]);
+  var parsed = SH_parseDate_(rawDate);
+  return SH_formatDateBR_(parsed);
+}
+
+function SH_brDateToIso_(brDate) {
+  var p = String(brDate || '').split('/');
+  if (p.length !== 3) return '';
+  return p[2] + '-' + p[1] + '-' + p[0];
+}
+
 function SH_getActorEmailRaw_(row) {
-  return SH_getFirstValueByAliases_(row, [
-    'RESPONS\u00c1VEL (ATOR)',
+  // Usa SH_getValueByAliases_ com NFD — resolve RESPONSÁVEL/RESPONSAVEL/RESPONSÃVEL automaticamente
+  return SH_getValueByAliases_(row, [
+    'RESPONSÁVEL (ATOR)',
     'RESPONSAVEL (ATOR)',
-    'RESPONS\u00c3VEL (ATOR)',
-    'RESPONS\u00c1VEL',
+    'RESPONSÃVEL (ATOR)',
+    'RESPONSÁVEL',
     'RESPONSAVEL',
     'ATOR',
     'ACTOR',
     'USER',
     'USUARIO',
-    'USU\u00c1RIO',
+    'USUÁRIO',
     'EMAIL',
     'E-MAIL',
     'EMAIL ATOR',
     'E-MAIL ATOR',
     'EMAIL_USUARIO',
     'EMAIL USUARIO',
-    'EMAIL USU\u00c1RIO',
+    'EMAIL USUÁRIO',
     'registro_auditado',
     'REGISTRO AUDITADO',
     'email',
     'e'
   ]);
+}
+
+function SH_normalizeCpName_(name) {
+  var n = String(name || '').trim().replace(/\s+N[\u00b0\u00ba]?\d+\s*$/i, '').trim();
+  if (!n) return n;
+  if (!/^CP\s+/i.test(n)) n = 'CP ' + n;
+  return n.replace(/\s+/g, ' ').trim();
 }
 
 function SH_normalizeEmail_(value) {
@@ -2546,16 +2643,22 @@ function getCpEvidenceData(cpInput, dateFrom, dateTo) {
 
     for (let i = 0; i < sourceRows.length; i++) {
       const row = sourceRows[i] || {};
-      const dCtx = getNativeDateContext(row['DATA'] || '');
-      const dateKey = dCtx ? dCtx.k : '';
+
+      // Alterado Patty - 10/05/2026: usar SH_getAccessDateBR_ para pegar data real do acesso,
+      // não a data da carga. Se não tiver data válida, ignorar a linha.
+      const dataBR = SH_getAccessDateBR_(row);
+      if (!dataBR) continue;
+      const dateKey = SH_brDateToIso_(dataBR);
+
       if (dateKey && todayKey && dateKey > todayKey) continue;
       if (dateKey && from && dateKey < from) continue;
       if (dateKey && to && dateKey > to) continue;
 
-      const cod = String(row['COD DO CP'] || row['COD'] || '').trim();
-      const nome = String(row['NOME DO CP'] || row['NOME'] || '').trim();
+      const cod = String(SH_getValueByAliases_(row, ['COD DO CP','COD CP','COD','CODIGO','CÓDIGO']) || '').trim();
+      const nomeRawEv = String(SH_getValueByAliases_(row, ['NOME DO CP','NOME CP','NOME','NAME']) || '').trim();
+      const nome = SH_normalizeCpName_(nomeRawEv);
       if (!cod && !nome) continue;
-      if (cod === 'Unknown' || nome === 'Evento NÃ£o Registrado ou Perdido') continue;
+      if (cod === 'Unknown' || nomeRawEv === 'Evento NÃ£o Registrado ou Perdido') continue;
 
       const codNorm = normalizeCpCode_(cod);
       const nameNorm = normalizeEvidenceSearchText_(nome);
@@ -2604,7 +2707,7 @@ function getCpEvidenceData(cpInput, dateFrom, dateTo) {
         t: tipo,
         c: cod,
         n: nome,
-        d: dCtx ? dCtx.f : String(row['DATA'] || ''),
+        d: dataBR,
         e: canAudit ? auditEmail : '',
         i: String(row['ARQUIVO_LOG'] || row['ARQUIVO'] || ''),
         v: auditValue

@@ -1459,6 +1459,52 @@ function SH_isResumoAdminEmail_(email) {
   return false;
 }
 
+// ═══════════════════════════════════════════════════════
+// SHERLOCK — QUALIDADE DO RESUMO OFICIAL
+// Alterado Patty - 11/05/2026
+// Motivo: impedir que ruídos e datas futuras contaminem Explorer, Analytics e cards.
+// ═══════════════════════════════════════════════════════
+
+// Enquanto a última carga manual oficial for 30/04/2026.
+// Quando houver nova carga manual validada, atualizar esta constante.
+var SH_RESUMO_MAX_ACCESS_DATE = '2026-04-30';
+
+function SH_isResumoNoiseCp_(codCp, nomeCp) {
+  var txt = String([codCp, nomeCp].join(' ') || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+  if (!txt) return true;
+
+  // Pega tanto texto normal quanto variações com problema de encoding,
+  // pois "Evento N\u00c3\u00a3o Registrado ou Perdido" ainda contém evento/registrado/perdido.
+  if (txt.includes('unknown'))                        return true;
+  if (txt.includes('desconhecido'))                   return true;
+  if (txt.includes('sem log'))                        return true;
+  if (txt.includes('sem registro'))                   return true;
+  if (txt.includes('capturado mas sem'))              return true;
+  if (txt.includes('evento') && txt.includes('registrado')) return true;
+  if (txt.includes('evento') && txt.includes('perdido'))    return true;
+
+  return false;
+}
+
+function SH_getResumoMaxDate_() {
+  var todayIso = Utilities.formatDate(
+    new Date(),
+    Session.getScriptTimeZone(),
+    'yyyy-MM-dd'
+  );
+  // Usa a menor data entre hoje e a última carga oficial conhecida.
+  // Evita exibir maio/dezembro quando a última carga validada foi 30/04.
+  if (SH_RESUMO_MAX_ACCESS_DATE && SH_RESUMO_MAX_ACCESS_DATE < todayIso) {
+    return SH_RESUMO_MAX_ACCESS_DATE;
+  }
+  return todayIso;
+}
+
 function SH_normalizeTipoReport_(tipo) {
   var t = String(tipo || '').trim().toUpperCase();
   if (t === 'CI') return 'Report CI';
@@ -1560,6 +1606,12 @@ function SH_readResumoFull_(ssId, sheetName, canAudit, payload) {
       var isoDate  = Utilities.formatDate(dateObj, tz, 'yyyy-MM-dd');
       var dispDate = Utilities.formatDate(dateObj, tz, 'dd/MM/yyyy');
 
+      // Alterado Patty - 11/05/2026
+      // Motivo: impedir que datas futuras ou posteriores à última carga manual oficial
+      // contaminem Explorer, Analytics, trend e totais.
+      var maxAllowedDate = SH_getResumoMaxDate_();
+      if (isoDate > maxAllowedDate) continue;
+
       // Filtros de período/data
       if (filterPeriod && isoDate.substring(0, 7) !== filterPeriod) continue;
       if (filterFrom   && isoDate < filterFrom) continue;
@@ -1570,13 +1622,10 @@ function SH_readResumoFull_(ssId, sheetName, canAudit, payload) {
       var nomeCpRaw = idx.nomeCp >= 0 ? String(row[idx.nomeCp] || '').trim() : '';
       var nomeCp    = SH_normalizeCpName_(nomeCpRaw);
 
-      // Regra resgatada: ignorar linhas de evento não registrado ou perdido
-      // Mesma lógica dos agregadores JSON (linhas ~2403). Alterado Patty - 11/05/2026
-      var nomeNormEvt = nomeCp.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      if (nomeNormEvt.includes('evento nao registrado') ||
-          nomeNormEvt.includes('evento perdido') ||
-          nomeNormEvt.includes('perdido') ||
-          codCp === 'Unknown' || codCp === 'unknown') continue;
+      // Alterado Patty - 11/05/2026
+      // Motivo: remover registros de ruído antes da agregação.
+      // Importante: precisa ser antes de out.views/out.trend/out.cpAgg.
+      if (SH_isResumoNoiseCp_(codCp, nomeCp)) continue;
 
       var tipoRaw   = idx.tipo >= 0 ? String(row[idx.tipo] || '').trim() : '';
       var tipo      = SH_normalizeTipoReport_(tipoRaw);

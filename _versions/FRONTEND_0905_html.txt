@@ -2,7 +2,7 @@
 <html>
 <head>
     <base target="_top">
-    <title>Auditoria de Acessos — Controle de Reports</title>
+    <title>Auditoria de Views — Controle de Reports</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Barlow+Condensed:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -1409,7 +1409,7 @@
                             
                             <div class="welcome-stats">
                                 <div class="welcome-stat">
-                                    <div class="k">Acessos/ View (Consolidado CI+CA)</div>
+                                    <div class="k">Views Oficiais (Consolidado CI+CA)</div>
                                     <div id="welcomeAuditTotal" class="v">0</div>
                                 </div>
                                 <div class="welcome-stat">
@@ -1468,7 +1468,7 @@
                             <div class="kpi-trend">Live</div>
                         </div>
                         <div class="kpi-val" id="bigTotal">-</div>
-                        <div class="kpi-label">Acessos Validados (Consolidado CI+CA)</div>
+                        <div class="kpi-label">Views Validadas (CI+CA)</div>
                     </div>
                     <div class="card kpi-card">
                         <div class="kpi-header">
@@ -1476,7 +1476,7 @@
                             <div class="kpi-trend" style="background:rgba(38,79,236,0.1); color:var(--p);">Período</div>
                         </div>
                         <div class="kpi-val" id="k1">-</div>
-                        <div class="kpi-label">Acessos no Período</div>
+                        <div class="kpi-label">Views no Período</div>
                     </div>
                     <div class="card kpi-card">
                         <div class="kpi-header">
@@ -1502,7 +1502,8 @@
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                             <div style="display:flex; flex-direction:column; gap:4px;">
                                 <div class="eyebrow">Histórico temporal</div>
-                                <h3 style="margin:0; font-size:1.25em; letter-spacing:0.2px;">Tendência e Atenção Operacional</h3>
+                                <h3 style="margin:0; font-size:1.25em; letter-spacing:0.2px;">Evolução de Views — Sherlock</h3>
+                                <p style="margin:4px 0 0; color:var(--m); font-size:0.82em;">Leitura de views auditadas, histórico validado e capacidade estimada CI+CA.</p>
                             </div>
                             <button id="btnSync" onclick="forceSync()" style="display:none; background:rgba(255,255,255,0.05); border:1px solid var(--border); color:white; padding:8px 15px; border-radius:12px; font-size:0.75em; cursor:pointer;">
                                 🔄 Force Refresh
@@ -1631,7 +1632,7 @@
                         <div class="card rank-card">
                             <h3 style="margin:0 0 5px 0; font-size:1em;">Engajados 🏆</h3>
                             <p style="margin:0; font-size:0.75em; color:var(--m);">Frequência de acesso alta</p>
-                            <div style="font-size:0.62em; color:var(--s); opacity:0.8; margin-bottom:15px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">(Acessos Totais Consolidado)</div>
+                            <div style="font-size:0.62em; color:var(--s); opacity:0.8; margin-bottom:15px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">(Views Totais CI+CA)</div>
                             <div id="topList" class="rank-list"></div>
                             <div class="rank-pagination">
                                 <button id="topPrevBtn" class="rank-page-btn" onclick="setRankPage('top', topRankPage - 1)">◀</button>
@@ -1642,7 +1643,7 @@
                         <div class="card rank-card">
                             <h3 style="margin:0 0 5px 0; font-size:1em;">Baixo Acesso ⚠️</h3>
                             <p style="margin:0; font-size:0.75em; color:var(--m);">Frequência reduzida</p>
-                            <div style="font-size:0.62em; color:var(--s); opacity:0.8; margin-bottom:15px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">(Acessos Totais Consolidado)</div>
+                            <div style="font-size:0.62em; color:var(--s); opacity:0.8; margin-bottom:15px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">(Views Totais CI+CA)</div>
                             <div id="bottomList" class="rank-list"></div>
                             <div class="rank-pagination">
                                 <button id="bottomPrevBtn" class="rank-page-btn" onclick="setRankPage('bottom', bottomRankPage - 1)">◀</button>
@@ -1841,7 +1842,7 @@
                             <div>
                                 <h4 style="margin:0 0 10px 0; font-size:1em;">Como cada número da Visão Rápida é calculado?</h4>
                                 <div style="margin:0; color:var(--m); font-size:0.95em; line-height:1.65;">
-                                    <p style="margin:0 0 8px 0;"><b>Acumulado Estratégico (2025/2026):</b> soma por faixa de datas sobre o trend diário; para visão CI+CA aplica fator <b>x2</b> (1 acesso Drive representa CI + CA).</p>
+                                    <p style="margin:0 0 8px 0;"><b>Views Estratégicas (2025/2026):</b> soma por faixa de datas sobre o trend diário; 1 e-mail/ator validado no CP por dia representa <b>2 views oficiais: CI + CA</b>.</p>
                                     <p style="margin:0 0 8px 0;"><b>Resumo anual (linhas CI+CA):</b> soma das linhas auditadas no período anual, sem multiplicador.</p>
                                     <p style="margin:0;"><b>Big Number 2026 (franquias):</b> recorte de 2026 excluindo usuário logado, e-mails de sistema e administrativos, com validação por cadastro de e-mails da franquia quando disponível.</p>
                                 </div>
@@ -1916,8 +1917,8 @@
                 <!-- Header da aba -->
                 <div class="an-header">
                     <div class="an-title-block">
-                        <h1 class="an-title">Análise de Acessos</h1>
-                        <p class="an-sub">Visão analítica detalhada por tipo, franquia e tendência temporal</p>
+                        <h1 class="an-title">Análise de Views</h1>
+                        <p class="an-sub">Visão analítica detalhada por report, franquia e tendência temporal</p>
                         <p class="an-sub-note"><em>* Foi realizada uma carga de e-mails para cerca de 100 CPs que estavam sem acesso registrado.<br>Pensando no engajamento da franquia e na proximidade com os nossos indicadores, é importante reforçar a comunicação para que mantenham os contatos sempre atualizados e incluam novos e-mails quando necessário.<br>Atualmente, o gerenciador conta com 4 campos disponíveis por CP, ampliando a cobertura de acesso e permitindo que mais colaboradores acompanhem os reports.</em></p>
                     </div>
                     <div class="an-filter-row">
@@ -3464,9 +3465,9 @@
             document.getElementById('modalCod').innerText = cod;
             document.getElementById('modalTotal').innerText = totalAcessos.toLocaleString();
             document.getElementById('modalDatas').innerText = datas.length;
-            // Renomeia label do modal para Acessos Totais
+            // Renomeia label do modal para Views Totais
             const modalTotalLabel = document.getElementById('modalTotalLabel');
-            if (modalTotalLabel) modalTotalLabel.innerText = 'Acessos Totais';
+            if (modalTotalLabel) modalTotalLabel.innerText = 'Views Totais';
 
             // Cabeçalho da coluna de auditoria
             document.getElementById('modalAuditHeader').innerText = '🔒 REGISTRO AUDITADO';

@@ -1476,43 +1476,6 @@
                                 <span style="color: var(--s); font-weight: 600;">Nota:</span> Por utilizar carga manual, alguns logs podem ser omitidos devido à janela temporal de processamento.
                             </p>
                             
-                            <div class="welcome-stats">
-                                <div class="welcome-stat">
-                                    <div class="k">Views 2025<br>(Histórico)</div>
-                                    <div id="welcomeViews2025" class="v">0</div>
-                                </div>
-                                <div class="welcome-stat">
-                                    <div class="k">Views Registradas<br>até o Momento</div>
-                                    <div id="welcomeViews2026" class="v">0</div>
-                                </div>
-                                <div class="welcome-stat">
-                                    <div class="k">Views após ajuste<br>campo e-mail (maio+)</div>
-                                    <div id="welcomeViewsEmailAdjusted" class="v">0</div>
-                                </div>
-                                <div class="welcome-stat">
-                                    <div class="k">Views Oficiais (Consolidado CI+CA)</div>
-                                    <div id="welcomeAuditTotal" class="v">0</div>
-                                </div>
-                                <div class="welcome-stat">
-                                    <div class="k">Disponibilizações</div>
-                                    <div id="welcomeDispoTotal" class="v">0</div>
-                                </div>
-                                <div class="welcome-stat">
-                                    <div class="k">CPs impactados</div>
-                                    <div id="welcomeCpTotal" class="v">0</div>
-                                </div>
-                                <div class="welcome-stat">
-                                    <div class="k">Identificação Sherlock</div>
-                                    <div id="welcomeQualityTotal" class="v">71,55%</div>
-                                </div>
-                                <div class="welcome-stat">
-                                    <div class="k" style="display:flex; justify-content:space-between; align-items:center;">
-                                        <span>CPs SEM FVC</span>
-                                        <a href="https://docs.google.com/spreadsheets/d/1yJYVJ1-mW0UxngqC07aCaff8_CaD46SuqJgfBFswIGw/edit?gid=258254121#gid=258254121" target="_blank" title="Abrir Planilha Oficial Focal" style="color:var(--m); font-size:1.1em; text-decoration:none; opacity:0.6;">🔗</a>
-                                    </div>
-                                    <div id="welcomeSemFvc" class="v">0</div>
-                                </div>
-                            </div>
                         </div>
                         <div class="welcome-sync">
                             <div id="lastSync" class="welcome-sync-main">🔄 Sincronizando...</div>

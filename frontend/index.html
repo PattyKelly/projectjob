@@ -2357,6 +2357,18 @@
             if (pagination) pagination.style.display = 'none';
         }
 
+        // Alterado Patty - 11/05/2026
+        // Motivo: evitar geração lenta de comprovante em janelas amplas.
+        const SH_FRONT_MAX_ACCESS_DATE = '2026-04-30';
+
+        function countMonthsInclusive_(fromIso, toIso) {
+            if (!fromIso || !toIso) return 1;
+            const f = String(fromIso).split('-').map(Number);
+            const t = String(toIso).split('-').map(Number);
+            if (f.length < 3 || t.length < 3 || f.some(isNaN) || t.some(isNaN)) return 1;
+            return ((t[0] - f[0]) * 12) + (t[1] - f[1]) + 1;
+        }
+
         // GERAR ONEPAGE DIRETO DA NUVEM
         function generateDirectOnePage() {
             const cpRaw = document.getElementById('opSearch').value;
@@ -2364,10 +2376,31 @@
             const dFrom = document.getElementById('opDateFrom').value;
             const dTo = document.getElementById('opDateTo').value;
             const btn = document.getElementById('opGenerateBtn');
+            const endDate = dTo || dFrom;
+            const maxMonthsEvidence = 3;
             
             if (!cp) return alert("⚠️ Digite o Código do CP para gerar o comprovante.");
             if (!dFrom) return alert("⚠️ Informe a data inicial para localizar o comprovante mais rápido.");
             if (dTo && dTo < dFrom) return alert("⚠️ A data final não pode ser anterior à data inicial.");
+
+            // Alterado Patty - 11/05/2026
+            // Motivo: evitar chamada lenta ao back para geração de comprovante em período muito amplo.
+            const monthsCount = countMonthsInclusive_(dFrom, endDate);
+            if (monthsCount > maxMonthsEvidence) {
+                return showToast(
+                    `Período muito amplo para gerar comprovante. Selecione no máximo ${maxMonthsEvidence} meses por vez.`,
+                    '⚠️'
+                );
+            }
+
+            // Alterado Patty - 11/05/2026
+            // Motivo: última carga oficial validada até 30/04/2026.
+            if (endDate && endDate > SH_FRONT_MAX_ACCESS_DATE) {
+                return showToast(
+                    'A última carga oficial está validada até 30/04/2026. Ajuste a data final.',
+                    '⚠️'
+                );
+            }
 
             if (btn) {
                 btn.disabled = true;
@@ -2414,7 +2447,7 @@
                     const datas = uniqueDates.size;
                     
                     const pStart = dFrom.split('-').reverse().join('/');
-                    const pEnd = dTo ? dTo.split('-').reverse().join('/') : new Date().toLocaleDateString('pt-BR');
+                    const pEnd = endDate ? endDate.split('-').reverse().join('/') : new Date().toLocaleDateString('pt-BR');
                     const periodo = pStart + " até " + pEnd;
                     const agora = new Date().toLocaleString('pt-BR');
 

@@ -2855,6 +2855,13 @@ function getEvidencePeriodsFromRange_(dateFrom, dateTo) {
   const startParts = from.split('-');
   const endValue = /^\d{4}-\d{2}-\d{2}$/.test(to) ? to : from;
   const endParts = endValue.split('-');
+  const maxAllowedDate = SH_getResumoMaxDate_();
+
+  // Alterado Patty - 11/05/2026
+  // Motivo: evitar varredura de meses sem carga oficial validada.
+  if (maxAllowedDate && endValue > maxAllowedDate) {
+    throw new Error('A última carga oficial está validada até ' + maxAllowedDate.split('-').reverse().join('/') + '. Ajuste a data final.');
+  }
 
   let y = Number(startParts[0]);
   let m = Number(startParts[1]);
@@ -2866,7 +2873,12 @@ function getEvidencePeriodsFromRange_(dateFrom, dateTo) {
     periods.push(String(y) + '-' + String(m).padStart(2, '0'));
     m++;
     if (m > 12) { m = 1; y++; }
-    if (periods.length > 24) throw new Error('Período muito amplo para comprovante. Selecione uma janela menor.');
+    // Alterado Patty - 11/05/2026
+    // Motivo: comprovante PDF estava lento ao permitir varrer muitos JSONs mensais.
+    // Limite temporário seguro: até 3 meses por emissão.
+    if (periods.length > 3) {
+      throw new Error('Período muito amplo para comprovante. Selecione no máximo 3 meses por emissão.');
+    }
   }
 
   return periods;

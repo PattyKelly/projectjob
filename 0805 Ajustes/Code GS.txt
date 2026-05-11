@@ -2402,6 +2402,16 @@
                 );
             }
 
+            // Abre janela imediatamente para não ser bloqueada pelo navegador
+            // quando o backend responder (contexto assíncrono).
+            const evidenceWin = window.open('', '_blank', 'width=900,height=700');
+            if (!evidenceWin) {
+                alert('⚠️ O navegador bloqueou o popup de impressão. Permita popups para este site e tente novamente.');
+                return;
+            }
+            evidenceWin.document.write('<html><head><title>Gerando comprovante...</title></head><body style="font-family:Arial;padding:24px;color:#111">Gerando comprovante, aguarde...</body></html>');
+            evidenceWin.document.close();
+
             if (btn) {
                 btn.disabled = true;
                 btn.style.opacity = '0.7';
@@ -2430,9 +2440,11 @@
                     }
                     
                     if (res.error) {
+                        if (evidenceWin && !evidenceWin.closed) evidenceWin.close();
                         return showToast("Erro ao buscar dados: " + res.error, '❌');
                     }
                     if (!res || !res.list || res.list.length === 0) {
+                        if (evidenceWin && !evidenceWin.closed) evidenceWin.close();
                         return showToast("Nenhum acesso registrado para este CP no período selecionado.", '🔍');
                     }
 
@@ -2497,7 +2509,9 @@
                         </body></html>
                     `;
 
-                    const win = window.open('', '_blank', 'width=900,height=700');
+                    const win = (evidenceWin && !evidenceWin.closed)
+                        ? evidenceWin
+                        : window.open('', '_blank', 'width=900,height=700');
                     win.document.write(html);
                     win.document.close();
                     win.focus();
@@ -2505,6 +2519,7 @@
                 })
                 .withFailureHandler(function(err) {
                     hideLoading();
+                    if (evidenceWin && !evidenceWin.closed) evidenceWin.close();
                     if (btn) {
                         btn.disabled = false;
                         btn.style.opacity = '1';
@@ -3362,6 +3377,11 @@
                         return;
                     }
 
+                    // Mantém estado de auditoria sincronizado com a resposta do backend.
+                    if (typeof res.canAudit === 'boolean') {
+                        canAudit = res.canAudit;
+                    }
+
                     fullList = res.list || [];
 
                     currentTablePage = Number(res.page || auditExplorerPage || 1);
@@ -3415,8 +3435,7 @@
                 const toIso = d => { if (!d) return ''; const p = String(d).split('/'); return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : String(d); };
                 return toIso(b.d).localeCompare(toIso(a.d));
             });
-            const term = document.getElementById('cpSearch').value.trim();
-            const showAudit = term.length > 0;
+            const showAudit = !!canAudit;
             const isServerMode = tablePaginationMode === 'server';
 
             const totalItems = isServerMode
@@ -3462,10 +3481,12 @@
                     ? `<td style="color:var(--m);font-size:0.8em">—</td>`
                     : `<td class="tag">${i.c}</td>`;
                 const safeEmail = auditEmailForUiOnlyFront_(i.e);
-                const auditCell = !safeEmail ? '' :
+                const auditCell = !safeEmail
+                    ? `<td style="font-size:0.75em;color:var(--m);font-style:italic">—</td>`
+                    :
                     safeEmail === '— sistema —'
                         ? `<td style="font-size:0.75em;color:var(--m);font-style:italic">— sistema —</td>`
-                        : `<td style="font-size:0.85em;color:#a5b4fc;font-weight:600;letter-spacing:0.03em">${maskEmail(safeEmail)}</td>`;
+                        : `<td style="font-size:0.85em;color:#a5b4fc;font-weight:600;letter-spacing:0.03em">${safeEmail}</td>`;
                 return `<tr data-cpkey="${cpKeyEsc}" style="cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">`+
                     `<td style="color:var(--m);font-size:0.75em">${i.d}</td>`+
                     `<td><span class="badge-report">${i.t}</span></td>`+
@@ -3871,7 +3892,7 @@
                 <tr>
                     <td style="color:var(--m); font-size:0.8em">${i.d}</td>
                     <td><span class="badge-report">${i.t}</span></td>
-                    <td style="font-size:0.8em; color:var(--m); font-style:italic">${safeAuditEmailFront_(i.e) ? maskEmail(i.e) : '—'}</td>
+                    <td style="font-size:0.8em; color:var(--m); font-style:italic">${safeAuditEmailFront_(i.e) ? i.e : '—'}</td>
                 </tr>
             `).join('');
 
@@ -3942,7 +3963,7 @@
                 const multiplier = i.v || 1;
                 for (let m = 0; m < multiplier; m++) {
                     const label = (multiplier > 1) ? (m % 2 === 0 ? 'Report CI' : 'Report CA') : i.t;
-                    rows.push(`<tr><td>${i.d}</td><td>${label}</td><td>${maskEmail(i.e) || '—'}</td></tr>`);
+                    rows.push(`<tr><td>${i.d}</td><td>${label}</td><td>${safeAuditEmailFront_(i.e) ? i.e : '—'}</td></tr>`);
                 }
             });
             const rowsHtml = rows.join('');
@@ -3999,8 +4020,7 @@
 
         function exportCSV() {
             if (fullList.length === 0) return alert('Nenhum dado para exportar neste filtro!');
-            const term = document.getElementById('cpSearch').value.trim();
-            const showAudit = term.length > 0;
+            const showAudit = !!canAudit;
             let csv = showAudit ? "DATA;TIPO;COD CP;NOME CP;REGISTRO AUDITADO\n" : "DATA;TIPO;COD CP;NOME CP\n";
             fullList.forEach(i => {
                 csv += showAudit

@@ -4031,8 +4031,10 @@
                         const items = Array.isArray(res.list) ? res.list : [];
 
                         if (!items.length) {
-                            showToast('Nenhum acesso encontrado para este CP no mês selecionado.', '🔎');
-                            return;
+                            // Se a API vier vazia, tenta abrir com a lista local já carregada
+                            // para não bloquear o usuário na tela do Explorer.
+                            showToast('Sem retorno completo no servidor. Abrindo lista local do período carregado...', '🔎');
+                            return openCpModal(cpName, true);
                         }
 
                         renderCpMiniModal_(items, cpName, Number(res.total || items.length));

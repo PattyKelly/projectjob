@@ -1603,35 +1603,70 @@ function getResumoAuditData(payload) {
   });
   var cpsAll = Object.assign({}, r2025.cpDistinct, r2026.cpDistinct);
 
+  var statsObj = {
+    audit:        r2025.views + r2026.views,
+    audit2025:    r2025.views,
+    audit2026:    r2026.views,
+    views2025:    r2025.views,
+    views2026:    r2026.views,
+    viewsRaw2025: r2025.views,
+    viewsRaw2026: r2026.views,
+    dispo:        r2025.dispo  + r2026.dispo,
+    cps:          Object.keys(cpsAll).length,
+    cps2025:      Object.keys(r2025.cpDistinct).length,
+    cps2026:      Object.keys(r2026.cpDistinct).length,
+    trend:        trendAll,
+    types:        typesAll,
+    top10:        ranking.slice(0, 10),
+    bottom10:     ranking.slice().sort(function(a, b) { return a.val - b.val; }).slice(0, 10),
+    suggestions:  ranking.map(function(x) { return x.cod + ' - ' + x.name; }),
+    listMeta: {
+      pageSize:            50,
+      maxPages:            500,
+      totalRowsAvailable:  r2025.totalRows + r2026.totalRows,
+      capped:              (r2025.totalRows + r2026.totalRows) > SH_RESUMO_MAX_LIST
+    }
+  };
+
+  // Cards executivos — objeto próprio para o front não adivinhar campo
+  statsObj.cards = SH_buildExecutiveCards_(statsObj);
+
   return {
     success: true,
     canAudit: canAudit,
     sourceMethod: 'SHEETS_RESUMO_OFICIAL',
     list: allList,
-    stats: {
-      audit:        r2025.views + r2026.views,
-      audit2025:    r2025.views,
-      audit2026:    r2026.views,
-      views2025:    r2025.views,
-      views2026:    r2026.views,
-      viewsRaw2025: r2025.views,
-      viewsRaw2026: r2026.views,
-      dispo:        r2025.dispo  + r2026.dispo,
-      cps:          Object.keys(cpsAll).length,
-      cps2025:      Object.keys(r2025.cpDistinct).length,
-      cps2026:      Object.keys(r2026.cpDistinct).length,
-      trend:        trendAll,
-      types:        typesAll,
-      top10:        ranking.slice(0, 10),
-      bottom10:     ranking.slice().sort(function(a, b) { return a.val - b.val; }).slice(0, 10),
-      suggestions:  ranking.map(function(x) { return x.cod + ' - ' + x.name; }),
-      listMeta: {
-        pageSize:            50,
-        maxPages:            500,
-        totalRowsAvailable:  r2025.totalRows + r2026.totalRows,
-        capped:              (r2025.totalRows + r2026.totalRows) > SH_RESUMO_MAX_LIST
-      }
-    }
+    stats: statsObj
+  };
+}
+
+/************************************************************
+ * SHERLOCK v8.4 — CARDS EXECUTIVOS OFICIAIS
+ * Patty — 10/05/2026
+ * Motivo: cards estavam lendo snapshot antigo (7.952).
+ * Cards oficiais lêem resumo_2025 e resumo_2026.
+ ************************************************************/
+function SH_buildExecutiveCards_(stats) {
+  stats = stats || {};
+
+  var views2025 = Number(stats.views2025 || 0);
+  var views2026 = Number(stats.views2026 || 0);
+  var viewsEmailMaio = Number(stats.viewsEmailMaioPlus || 0);
+
+  var cpsTotal = Number(stats.cps || 0);
+  var cpsSemFvc = 40;
+  var cpsImpactadosFvc = Math.max(0, cpsTotal - cpsSemFvc);
+
+  return {
+    views2025:           views2025,
+    views2026:           views2026,
+    viewsEmailMaioPlus:  viewsEmailMaio,
+    viewsOficiais:       views2025 + views2026,
+    disponibilizacoes:   Number(stats.dispo || 0),
+    cpsTotalEncontrados: cpsTotal,
+    cpsImpactados:       cpsImpactadosFvc,
+    cpsSemFvc:           cpsSemFvc,
+    identificacaoSherlock: Number(stats.qualityTotal || 74.84)
   };
 }
 

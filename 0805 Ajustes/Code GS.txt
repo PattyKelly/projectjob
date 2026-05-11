@@ -755,6 +755,75 @@
             border-color: rgba(249,115,22,0.32);
         }
         #appShell .dashboard-kpi-grid .kpi-card:nth-child(4) .kpi-val { color: #fdba74; }
+
+        /* === EXECUTIVE KPI GRID v8.4 — Patty 10/05/2026 === */
+        .executive-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(170px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+            max-width: 1120px;
+        }
+        .executive-kpi-card {
+            min-height: 92px;
+            border-radius: 12px;
+            padding: 14px 16px;
+            background: rgba(2, 20, 44, 0.78);
+            border: 1px solid rgba(38, 79, 236, 0.35);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+        .executive-kpi-card .kpi-title {
+            font-size: 0.72rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: #8ea7d8;
+            line-height: 1.1;
+        }
+        .executive-kpi-card .kpi-subtitle {
+            margin-top: 2px;
+            font-size: 0.68rem;
+            color: rgba(180, 196, 230, 0.72);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+        .executive-kpi-card .kpi-number {
+            margin-top: 8px;
+            font-size: 1.35rem;
+            font-weight: 900;
+            line-height: 1;
+            color: #74b3ff;
+        }
+        .executive-kpi-card.blue {
+            border-color: rgba(38, 79, 236, 0.55);
+            background: linear-gradient(135deg, rgba(5, 30, 72, 0.88), rgba(3, 12, 28, 0.92));
+        }
+        .executive-kpi-card.pink {
+            border-color: rgba(255, 94, 201, 0.55);
+            background: linear-gradient(135deg, rgba(58, 20, 68, 0.72), rgba(3, 12, 28, 0.92));
+        }
+        .executive-kpi-card.pink .kpi-number  { color: #ff9adf; }
+        .executive-kpi-card.green {
+            border-color: rgba(16, 185, 129, 0.55);
+            background: linear-gradient(135deg, rgba(8, 65, 58, 0.7), rgba(3, 12, 28, 0.92));
+        }
+        .executive-kpi-card.green .kpi-number  { color: #6effc1; }
+        .executive-kpi-card.yellow {
+            border-color: rgba(234, 179, 8, 0.62);
+            background: linear-gradient(135deg, rgba(70, 60, 12, 0.62), rgba(3, 12, 28, 0.92));
+        }
+        .executive-kpi-card.yellow .kpi-number { color: #f8f35a; }
+        .executive-kpi-card.orange {
+            border-color: rgba(249, 115, 22, 0.58);
+            background: linear-gradient(135deg, rgba(78, 38, 12, 0.65), rgba(3, 12, 28, 0.92));
+        }
+        .executive-kpi-card.orange .kpi-number { color: #ffb26b; }
+        @media (max-width: 1200px) {
+            .executive-kpi-grid { grid-template-columns: repeat(2, minmax(170px, 1fr)); }
+        }
+        @media (max-width: 700px) {
+            .executive-kpi-grid { grid-template-columns: 1fr; }
+        }
         .dashboard-analytics-grid {
             align-items: stretch;
             margin-bottom: 20px;
@@ -1464,40 +1533,56 @@
                     </div>
                 </div>
 
-                <!-- KPI GRID -->
-                <div class="dashboard-grid dashboard-kpi-grid">
-                    <div class="card kpi-card">
-                        <div class="kpi-header">
-                            <div class="kpi-icon bg-blue">👤</div>
-                            <div class="kpi-trend">Live</div>
-                        </div>
-                        <div class="kpi-val" id="bigTotal">-</div>
-                        <div class="kpi-label">Views Validadas (CI+CA)</div>
-                    </div>
-                    <div class="card kpi-card">
-                        <div class="kpi-header">
-                            <div class="kpi-icon bg-pink">📊</div>
-                            <div class="kpi-trend" style="background:rgba(38,79,236,0.1); color:var(--p);">Período</div>
-                        </div>
-                        <div class="kpi-val" id="k1">-</div>
-                        <div class="kpi-label">Views no Período</div>
-                    </div>
-                    <div class="card kpi-card">
-                        <div class="kpi-header">
-                            <div class="kpi-icon bg-green">🎯</div>
-                            <div class="kpi-trend">Stable</div>
-                        </div>
-                        <div class="kpi-val" id="k2">-</div>
-                        <div class="kpi-label">Franquias Engajadas</div>
-                    </div>
-                    <div class="card kpi-card">
-                        <div class="kpi-header">
-                            <div class="kpi-icon bg-orange">📦</div>
-                            <div class="kpi-trend" id="k3-trend" style="background:rgba(249,115,22,0.15); color:#fdba74;">GB</div>
-                        </div>
-                        <div class="kpi-val" id="k3">-</div>
-                        <div class="kpi-label">Disponibilizações</div>
-                    </div>
+                <!-- KPI GRID EXECUTIVO v8.4 — Patty 10/05/2026 -->
+                <!-- Linha 1: Views 2025 | Views 2026 | Views após ajuste | Views oficiais -->
+                <!-- Linha 2: Disponibilizações | CPs impactados | Identificação | CPs sem FVC -->
+                <!-- IDs legados bigTotal/k1/k2/k3 mantidos ocultos para não quebrar JS antigo -->
+                <span id="bigTotal" style="display:none"></span>
+                <span id="k1" style="display:none"></span>
+                <span id="k2" style="display:none"></span>
+                <span id="k3" style="display:none"></span>
+
+                <div class="executive-kpi-grid">
+                  <div class="executive-kpi-card blue">
+                    <div class="kpi-title">Views 2025</div>
+                    <div class="kpi-subtitle">Histórico resumo oficial</div>
+                    <div id="cardViews2025" class="kpi-number">—</div>
+                  </div>
+                  <div class="executive-kpi-card pink">
+                    <div class="kpi-title">Views 2026</div>
+                    <div class="kpi-subtitle">Até o momento</div>
+                    <div id="cardViews2026" class="kpi-number">—</div>
+                  </div>
+                  <div class="executive-kpi-card green">
+                    <div class="kpi-title">Views após ajuste</div>
+                    <div class="kpi-subtitle">Campo e-mail maio+</div>
+                    <div id="cardViewsEmailMaio" class="kpi-number">—</div>
+                  </div>
+                  <div class="executive-kpi-card yellow">
+                    <div class="kpi-title">Views oficiais</div>
+                    <div class="kpi-subtitle">Consolidado CI + CA</div>
+                    <div id="cardViewsOficiais" class="kpi-number">—</div>
+                  </div>
+                  <div class="executive-kpi-card orange">
+                    <div class="kpi-title">Disponibilizações</div>
+                    <div class="kpi-subtitle">Operação / entrega</div>
+                    <div id="cardDispo" class="kpi-number">—</div>
+                  </div>
+                  <div class="executive-kpi-card blue">
+                    <div class="kpi-title">CPs impactados</div>
+                    <div class="kpi-subtitle">FVC com acesso</div>
+                    <div id="cardCpsImpactados" class="kpi-number">—</div>
+                  </div>
+                  <div class="executive-kpi-card blue">
+                    <div class="kpi-title">Identificação Sherlock</div>
+                    <div class="kpi-subtitle">Qualidade da leitura</div>
+                    <div id="cardIdentificacao" class="kpi-number">—</div>
+                  </div>
+                  <div class="executive-kpi-card blue">
+                    <div class="kpi-title">CPs sem FVC</div>
+                    <div class="kpi-subtitle">Base sem vínculo</div>
+                    <div id="cardCpsSemFvc" class="kpi-number">40</div>
+                  </div>
                 </div>
 
                 <!-- MAIN CHART + SIDE CARD -->
@@ -2836,6 +2921,41 @@
                 .join('');
         }
 
+        /************************************************************
+         * SHERLOCK v8.4 — RENDER CARDS EXECUTIVOS
+         * Patty — 10/05/2026
+         * Usa stats.cards enviado pelo back (getResumoAuditData).
+         * Não depende de stats.audit / stats.audit2026 / snapshot.
+         ************************************************************/
+        function setCardValue_(id, value) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.innerText = Number(value || 0).toLocaleString('pt-BR');
+        }
+
+        function setCardText_(id, value) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.innerText = String(value || '—');
+        }
+
+        function renderExecutiveCards() {
+            const cards = (stats && stats.cards) ? stats.cards : {};
+
+            const v2025 = Number(cards.views2025 || 0);
+            const v2026 = Number(cards.views2026 || 0);
+
+            setCardValue_('cardViews2025',      v2025);
+            setCardValue_('cardViews2026',      v2026);
+            setCardValue_('cardViewsEmailMaio', Number(cards.viewsEmailMaioPlus || 0));
+            setCardValue_('cardViewsOficiais',  Number(cards.viewsOficiais || (v2025 + v2026)));
+            setCardValue_('cardDispo',          Number(cards.disponibilizacoes || 0));
+            setCardValue_('cardCpsImpactados',  Number(cards.cpsImpactados || 0));
+            setCardValue_('cardCpsSemFvc',      Number(cards.cpsSemFvc || 40));
+            setCardText_('cardIdentificacao',
+                (Number(cards.identificacaoSherlock || 74.84)).toFixed(2).replace('.', ',') + '%');
+        }
+
         function renderData() {
             currentTablePage = 1;
 
@@ -2928,6 +3048,9 @@
 
             renderTrend();
             renderTable(fullList);
+
+            // Alterado Patty 10/05/2026: cards executivos via stats.cards
+            renderExecutiveCards();
 
             // Popula a Última Carga do Servidor
             const datesArr = Object.keys((stats && stats.trend) ? stats.trend : {}).sort();

@@ -1409,16 +1409,16 @@
                             
                             <div class="welcome-stats">
                                 <div class="welcome-stat">
-                                    <div class="k">Views Oficiais (Consolidado CI+CA)</div>
-                                    <div id="welcomeAuditTotal" class="v">0</div>
-                                </div>
-                                <div class="welcome-stat">
-                                    <div class="k">Views 2025<br>(Histórico Validado)</div>
+                                    <div class="k">Views 2025<br>(Histórico)</div>
                                     <div id="welcomeViews2025" class="v">0</div>
                                 </div>
                                 <div class="welcome-stat">
-                                    <div class="k">Views até o momento<br>(2026)</div>
+                                    <div class="k">Views 2026<br>(até o momento)</div>
                                     <div id="welcomeViews2026" class="v">0</div>
+                                </div>
+                                <div class="welcome-stat">
+                                    <div class="k">Views Oficiais (Consolidado CI+CA)</div>
+                                    <div id="welcomeAuditTotal" class="v">0</div>
                                 </div>
                                 <div class="welcome-stat">
                                     <div class="k">Disponibilizações</div>
@@ -2774,8 +2774,9 @@
             if (topCps) topCps.innerText = toSafeNumber(stats && stats.cps).toLocaleString('pt-BR');
 
             // Alterado Patty - 10/05/2026: cards de views por ano
+            // views2026 usa viewsPotential2026 que ja calcula 4 emails/CP a partir de maio
             const views2025 = Number(stats && (stats.viewsOfficial2025 || stats.audit2025 || stats.viewsRaw2025) || 0);
-            const views2026 = Number(stats && (stats.viewsAudited2026 || stats.viewsOfficial2026 || stats.audit2026 || stats.viewsRaw2026) || 0);
+            const views2026 = Number(stats && (stats.viewsPotential2026 || stats.viewsAudited2026 || stats.viewsOfficial2026 || stats.audit2026 || stats.viewsRaw2026) || 0);
             setTextSafe('welcomeViews2025', views2025.toLocaleString('pt-BR'));
             setTextSafe('welcomeViews2026', views2026.toLocaleString('pt-BR'));
 

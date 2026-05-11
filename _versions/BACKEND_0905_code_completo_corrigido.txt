@@ -1818,6 +1818,54 @@ function normalizeActorEmail_(value) {
   return match ? String(match[0]).toLowerCase().trim() : '';
 }
 
+// ═══════════════════════════════════════════════════════
+// LEITURA ROBUSTA DO CAMPO DE E-MAIL/ATOR
+// Alterado Patty - 10/05/2026
+// Motivo: JSONs podem ter 'RESPONSÁVEL (ATOR)' ou variantes com encoding.
+// Admin/dev continua oculto; e-mail de cliente continua visível mascarado.
+// ═══════════════════════════════════════════════════════
+
+function getRowValueByAliases_(row, aliases) {
+  if (!row || typeof row !== 'object') return '';
+  for (var i = 0; i < aliases.length; i++) {
+    var key = aliases[i];
+    if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== '') {
+      return row[key];
+    }
+  }
+  return '';
+}
+
+function getAuditActorRawFromRow_(row) {
+  return getRowValueByAliases_(row, [
+    'RESPONS\u00c1VEL (ATOR)',
+    'RESPONSAVEL (ATOR)',
+    'RESPONS\u00c3VEL (ATOR)',
+    'RESPONS\u00c1VEL',
+    'RESPONSAVEL',
+    'ATOR',
+    'E-MAIL',
+    'EMAIL',
+    'EMAIL ATOR',
+    'USU\u00c1RIO',
+    'USUARIO',
+    'USER',
+    'ACTOR'
+  ]);
+}
+
+function getQuantityFromAuditRow_(row) {
+  var raw = getRowValueByAliases_(row, [
+    'QUANTIDADE DE ACESSOS',
+    'QTD ACESSOS',
+    'QTD',
+    'VIEWS',
+    'ACESSOS'
+  ]);
+  var n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
 function isSystemActorEmail_(email) {
   if (!email) return true;
   const local = String(email).split('@')[0] || '';
@@ -1909,7 +1957,7 @@ function api_getAuditExplorerPage(params) {
       const tipo    = tipoRaw === 'Outro' ? 'Acesso ao Drive' : tipoRaw;
       const cod     = String(row['COD DO CP']  || 'Unknown').trim();
       const nome    = String(row['NOME DO CP'] || '').trim();
-      const ator    = String(row['RESPONSÁVEL (ATOR)'] || row['RESPONSAVEL (ATOR)'] || '').trim();
+      const ator    = String(getAuditActorRawFromRow_(row) || '').trim();
       const dCtx    = getNativeDateContext(row['DATA'] || '');
       const dateKey = dCtx ? dCtx.k : '';
       const fDate   = dCtx ? dCtx.f : String(row['DATA'] || '');
@@ -2105,7 +2153,7 @@ function buildResponseFromJson_(data, filterParams) {
       const tipo = tipoRaw === 'Outro' ? 'Acesso ao Drive' : tipoRaw;
       const cod  = String(row['COD DO CP'] || 'Unknown').trim();
       const nom  = String(row['NOME DO CP'] || '').trim();
-      const ator = String(row['RESPONSÃVEL (ATOR)'] || row['RESPONSAVEL (ATOR)'] || '').toLowerCase().trim();
+      const ator = String(getAuditActorRawFromRow_(row) || '').toLowerCase().trim();
       const qtd  = parseFloat(row['QUANTIDADE DE ACESSOS']) || 1;
       const dCtx = getNativeDateContext(row['DATA'] || '');
       const dateKey = dCtx ? dCtx.k : '';
@@ -2409,8 +2457,11 @@ function getCpEvidenceData(cpInput, dateFrom, dateTo) {
 
       if (!matches) continue;
 
-      const actor = normalizeActorEmail_(row['RESPONSÃVEL (ATOR)'] || row['RESPONSAVEL (ATOR)'] || row['ATOR']);
+      // Alterado Patty - 10/05/2026: leitura robusta do ator; oculta apenas admin/dev
+      const actorRaw = getAuditActorRawFromRow_(row);
+      const actor = normalizeActorEmail_(actorRaw);
       if (ADMIN_EMAILS_EXCLUIR[actor]) continue;
+      if (isDevAdminEmailToHideOnly_(actor)) continue;
 
       const tipoRaw = String(row['TIPO DO REPORT'] || row['TIPO'] || 'Outro').trim();
       const tipo = tipoRaw === 'Outro' ? 'Acesso ao Drive' : tipoRaw;
@@ -2421,7 +2472,7 @@ function getCpEvidenceData(cpInput, dateFrom, dateTo) {
       if (!auditSeen.has(uniqKey) && actor && actor !== 'unknown') {
         auditSeen.add(uniqKey);
         // Comprovante otimizado: cada linha é evidência real do log, sem FVC/produto
-        auditValue = parseFloat(row['QUANTIDADE DE ACESSOS']) || 1;
+        auditValue = getQuantityFromAuditRow_(row);
       }
 
       list.push({

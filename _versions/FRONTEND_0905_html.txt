@@ -2332,9 +2332,10 @@
                     const periodo = pStart + " até " + pEnd;
                     const agora = new Date().toLocaleString('pt-BR');
 
-                    const rows = cpItems.map(i =>
-                        `<tr><td>${i.d}</td><td>${i.t}</td><td>${res.canAudit ? (i.e || '—') : '***'}</td></tr>`
-                    ).join('');
+                    const rows = cpItems.map(i => {
+                        const emailAuditoria = res.canAudit && i.e ? maskEmail(i.e) : '—';
+                        return `<tr><td>${i.d}</td><td>${i.t}</td><td>${emailAuditoria}</td></tr>`;
+                    }).join('');
 
                     const html = `
                         <html><head><title>Comprovante de Acesso — ${nome}</title>

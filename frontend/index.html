@@ -2018,6 +2018,36 @@
                         </div>
                     </div>
 
+                    <!-- Q10.1: DLP Unknown Event 2025 -->
+                    <div class="card">
+                        <div style="display:flex; align-items:flex-start; gap:15px;">
+                            <div style="font-size:1.4em; flex-shrink:0;">❓</div>
+                            <div>
+                                <h4 style="margin:0 0 10px 0; font-size:1em;">Por que aparece "Outro Unknown Evento Não Registrado ou Perdido" em 2025?</h4>
+                                <p style="margin:0 0 10px 0; color:var(--m); font-size:0.93em; line-height:1.6;">
+                                    Essa mensagem (também vista em inglês como "Another Unknown Unlogged or Lost Event")
+                                    geralmente indica uma limitação de detalhamento dos logs de segurança do Google Drive
+                                    quando uma regra de DLP é acionada sem uma ação humana direta no momento do evento.
+                                </p>
+                                <div style="margin:0 0 10px 0; color:var(--m); font-size:0.92em; line-height:1.65;">
+                                    <p style="margin:0 0 7px 0;"><b>Principais motivos:</b></p>
+                                    <p style="margin:0 0 6px 0;">1. <b>Varredura em segundo plano:</b> ao criar/ajustar regra DLP, o Google reavalia arquivos antigos e pode registrar o impacto sem "clique" de usuário.</p>
+                                    <p style="margin:0 0 6px 0;">2. <b>Drive para Desktop/Sync:</b> ações de sincronização local nem sempre mapeiam com o mesmo nível de detalhe dos eventos no navegador.</p>
+                                    <p style="margin:0 0 6px 0;">3. <b>Regra em modo auditoria:</b> políticas "audit-only" podem gerar registros genéricos de potencial violação.</p>
+                                    <p style="margin:0;">4. <b>Limitação de log/API:</b> algumas operações em visualização e Drive Compartilhado podem chegar sem ator final completo.</p>
+                                </div>
+                                <div style="margin:0; color:var(--m); font-size:0.92em; line-height:1.65;">
+                                    <p style="margin:0 0 7px 0;"><b>Como investigar:</b></p>
+                                    <p style="margin:0 0 6px 0;">1. Cruzar o mesmo horário no Admin Console (Drive Log + Regras DLP) para confirmar se houve varredura automática.</p>
+                                    <p style="margin:0 0 6px 0;">2. Validar mudanças recentes na política DLP (criação, escopo, modo auditoria/bloqueio).</p>
+                                    <p style="margin:0 0 6px 0;">3. Conferir se o acesso veio de cliente de sincronização (Desktop) e não apenas web.</p>
+                                    <p style="margin:0 0 6px 0;">4. Verificar o tipo de ação no evento (view, move, share, scan) e o nível de detalhe disponível.</p>
+                                    <p style="margin:0;">5. Para 2025, considerar a política de retenção: parte dos metadados de ator pode não estar mais íntegra, mesmo com volume preservado.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Q11: Aumento de Views em Meses Anteriores -->
                     <div class="card">
                         <div style="display:flex; align-items:flex-start; gap:15px;">

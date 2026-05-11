@@ -2652,9 +2652,16 @@ function buildResponseFromJson_(data, filterParams) {
       const dateKey = dCtx ? dCtx.k : '';
       const fDate   = dCtx ? dCtx.f : '';
 
-      // Descarta datas futuras (ex: datas em dezembro 2026 geradas por inversÃ£o mÃªs/dia no ETL)
-      const TODAY_KEY = new Date().toISOString().substring(0, 10); // YYYY-MM-DD
-      if (dateKey && dateKey > TODAY_KEY) continue;
+      // Alterado Patty - 11/05/2026
+      // Motivo: impedir que eventos perdidos, CP vazio/Unknown e datas futuras
+      // entrem no Explorer, nos totais JSON e na lista fullList.
+      const codNormSherlock = normalizeCpCode_(cod);
+      const maxAllowedDateSherlock = SH_getResumoMaxDate_();
+
+      if (dateKey && maxAllowedDateSherlock && dateKey > maxAllowedDateSherlock) continue;
+      if (!codNormSherlock) continue;
+      if (String(cod || '').trim().toLowerCase() === 'unknown') continue;
+      if (SH_isResumoNoiseCp_(cod, nom)) continue;
 
       const isAdminActor = isAdminActor_(ator);
 
@@ -3115,19 +3122,22 @@ function getCpEvidenceData(cpInput, dateFrom, dateTo) {
       if (!dataBR) continue;
       const dateKey = SH_brDateToIso_(dataBR);
 
+
+        // Alterado Patty - 11/05/2026
+        // Motivo: regra única de qualidade para o Audit Log Explorer.
+        // Remove CP vazio, Unknown, Evento Nao Registrado/Perdido e datas futuras.
+        const codNorm = normalizeCpCode_(cod);
+        const maxAllowedDate = SH_getResumoMaxDate_();
+
+        if (dateKey && maxAllowedDate && dateKey > maxAllowedDate) continue;
+        if (!codNorm) continue;
+        if (String(cod || '').trim().toLowerCase() === 'unknown') continue;
+        if (SH_isResumoNoiseCp_(cod, nomeRaw) || SH_isResumoNoiseCp_(cod, nome)) continue;
       if (dateKey && todayKey && dateKey > todayKey) continue;
       if (dateKey && from && dateKey < from) continue;
-      if (dateKey && to && dateKey > to) continue;
-
-      const cod = String(SH_getValueByAliases_(row, ['COD DO CP','COD CP','COD','CODIGO','CÓDIGO']) || '').trim();
-      const nomeRawEv = String(SH_getValueByAliases_(row, ['NOME DO CP','NOME CP','NOME','NAME']) || '').trim();
-      const nome = SH_normalizeCpName_(nomeRawEv);
-      if (!cod && !nome) continue;
-      if (cod === 'Unknown' || nomeRawEv === 'Evento NÃ£o Registrado ou Perdido') continue;
-
       const codNorm = normalizeCpCode_(cod);
       const nameNorm = normalizeEvidenceSearchText_(nome);
-      const rowText = normalizeEvidenceSearchText_(cod + ' ' + nome);
+        parsed.push({ t: tipo, c: codNorm, n: nome, d: fDate, dateKey: dateKey,
       let matches = false;
 
       if (queryCode && codNorm && codNorm === queryCode) {
